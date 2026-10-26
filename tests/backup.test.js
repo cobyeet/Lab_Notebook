@@ -91,6 +91,9 @@ test('Postgres backup endpoints enforce capabilities, private tables, revision c
   try {
     await db.exec('create role anon; create role authenticated; grant usage on schema public to anon,authenticated;');
     await db.exec(await readFile(new URL('../supabase/migrations/20261026233329_private_automatic_backups.sql',import.meta.url),'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261026233851_optimize_backup_payload_validation.sql',import.meta.url),'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261026234014_backup_request_limits.sql',import.meta.url),'utf8'));
+    await db.query('select ln_private.check_backup($1)',[{...payload,ciphertext:'A'.repeat(10*1024*1024)}]);
     await db.exec('set role anon');
     const initial=(await db.query('select public.ln_backup_create($1,$2) result',[owner,payload])).rows[0].result;
     const id=initial.id;
