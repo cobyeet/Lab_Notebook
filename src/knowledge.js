@@ -274,7 +274,7 @@ export function filterEntries(entries, f = {}) {
     (e) =>
       (!f.project || e.project === f.project) &&
       (!f.kind || (e.kind || "entry") === f.kind) &&
-      (!f.status || e.status === f.status) &&
+      (!f.status || (e.status === "in-progress" ? "observation" : e.status) === (f.status === "in-progress" ? "observation" : f.status)) &&
       (!f.from || e.date >= f.from) &&
       (!f.to || e.date <= f.to) &&
       (!f.tag || (e.tags || []).includes(f.tag)) &&

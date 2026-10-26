@@ -9,6 +9,7 @@ import {
   validateNotebook,
   renderTextLinks,
   paginate,
+  statusLabel,
 } from "../src/model.js";
 import {
   relationships,
@@ -20,6 +21,20 @@ import {
 } from "../src/knowledge.js";
 import { readerEdition } from "../src/sharing.js";
 import { exportBundle } from "../src/exports.js";
+
+test('dated records and legacy progress labels share a view without rewriting their evidence or history', () => {
+  const n = fixture();
+  n.entries[0].status = 'in-progress';
+  n.entries[0].revisions = [{status:'unverified',body:'Earlier interpretation'}];
+  n.entries[1].status = 'verified';
+  const before = structuredClone(n);
+  assert.equal(statusLabel(n.entries[0].status),'Recorded');
+  assert.equal(filterEntries(n.entries,{status:'observation'}).length,5);
+  assert.deepEqual(filterEntries(n.entries,{status:'in-progress'}),filterEntries(n.entries,{status:'observation'}));
+  assert.equal(filterEntries(n.entries,{status:'verified'}).length,1);
+  validateNotebook(n,true);
+  assert.deepEqual(n,before);
+});
 
 function fixture() {
   const n = blankNotebook();

@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { zipSync, strToU8 } from "fflate";
-import { numericTable, paginate, inlineLinks } from "./model.js";
+import { numericTable, paginate, inlineLinks, statusLabel } from "./model.js";
 import { pythonFigures, matlabFigures } from "./figure-templates.js";
 import {obsidianFiles} from './obsidian.js';
 import {resolveTarget} from './knowledge.js';
@@ -64,7 +64,7 @@ export function handoff(notebook, pages) {
     }
     const e = p.entry;
     lines.push(
-      `Entry: ${e.id} | Date: ${e.date} | Project: ${e.project} | Evidence: ${e.status}`,
+      `Entry: ${e.id} | Date: ${e.date} | Project: ${e.project} | Evidence: ${statusLabel(e.status)}`,
       "",
     );
     for (const b of p.blocks) {
@@ -291,7 +291,7 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
     } else {
       const e = p.entry;
       if(!entrySheets.has(e.id))entrySheets.set(e.id,firstSheet);
-      text(`${e.date.replaceAll("-", "")}  /  ${e.project}  /  ${e.status}`, 9);
+      text(`${e.date.replaceAll("-", "")}  /  ${e.project}  /  ${statusLabel(e.status)}`, 9);
       text(e.title + (p.continuation ? " (continued)" : ""), 24, "bold");
       for (const b of p.blocks) {
         if (b.kind === "text") text(b.text,11,"normal",true);

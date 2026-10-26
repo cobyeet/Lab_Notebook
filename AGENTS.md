@@ -80,7 +80,7 @@ Minimal entry shape:
   "project": "ANALYSIS",
   "title": "Daily analysis and validation",
   "body": "- Salient experiment, analysis, or activity and its purpose.\n- Important observation or decision, with any limitation needed to interpret it.",
-  "status": "in-progress",
+  "status": "observation",
   "significant": false,
   "sources": "Repository URL and commit; test evidence; chat reference if available",
   "next": "Next concrete action",
@@ -88,7 +88,7 @@ Minimal entry shape:
 }
 ```
 
-`created` is added by the CLI. `status`: observation, in-progress, unverified, verified. `date` uses local calendar date. Projects are free text. Files supplied with `--attach` are embedded; no filesystem paths become required notebook references. Attachment payloads contain `id`, `name`, `kind`, `data` (base64 data URL), `sha256`, and for CSV, `table` with `headers` and `rows`.
+`created` is added by the CLI. For new entries, use `status`: observation (displayed as Recorded), unverified, or verified. This describes evidence, not whether the day or project is complete. Record ongoing work in `next` or tracked tasks. Legacy `in-progress` values remain supported for compatibility and display as Recorded; do not introduce them in new daily entries. `date` uses local calendar date. Projects are free text. Files supplied with `--attach` are embedded; no filesystem paths become required notebook references. Attachment payloads contain `id`, `name`, `kind`, `data` (base64 data URL), `sha256`, and for CSV, `table` with `headers` and `rows`.
 
 To let the website and agents use the same canonical file:
 

@@ -30,9 +30,11 @@ The example path above is user configuration, never an application assumption. T
 
 ## Read and contribute
 
-- **Read:** A horizontal book starting on the right. Scroll left toward older work, use arrow controls, enter a page number, or jump from the contents. Dates use YYYYMMDD in the reader.
+- **Read:** A horizontal book starting on the left. Scroll right toward older work, use arrow controls, enter a page number, or jump from the contents. Dates use YYYYMMDD in the reader. The page controls stay visible; the sidebar scrolls independently to reach its lower tools.
 - **Contents:** Always page 1; only entries marked as milestones appear. Columns are date, project, title, and first page. Routine entries remain in the book.
 - **Contribute:** Add or edit dated entries, retain drafts, record evidence status, provenance, and next steps. Projects are free text. Settings customize the notebook identity.
+
+Dated entries describe the work recorded on that date. Their labels are **Recorded**, **Unverified**, or **Verified**, not a task completion indicator. Put ongoing work in **Next steps** or tracked tasks so older entries do not need a later completion-label update. Legacy `in-progress` values remain readable and display as Recorded; the stored evidence and original revisions are preserved until an intentional edit.
 - **Attachments:** Drop CSVs for paginated tables and images for previews. FIG, MAT, PDF, SVG, and NPZ are preserved as downloadable originals. SVG is deliberately retained as a file, not executed as page markup. Up to 20 MB per file, 100 attachments per entry. CSV previews support 20,000 rows / 100 columns.
 - **Stable references:** Permanent links use entry IDs; changing page numbers do not break references. Links resolve within a notebook that actually contains the entry.
 - **Clickable references:** Notes, sources, and next steps support `[descriptive text](https://...)` links to code, figures, data, and protocols. Labels stay concise in the reader and clickable in PDF exports; Markdown handoffs preserve the original destinations. Use verified GitHub commit/file links and configured Webdisk URLs. Existing reader access is assumed. Raw HTML, local filesystem links, and executable URL schemes are not interpreted.

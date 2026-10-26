@@ -1,6 +1,9 @@
 import Papa from "papaparse";
 import { validateKnowledge, validateWorkspace, resolveTarget } from './knowledge.js';
 export const SCHEMA = 1;
+export function statusLabel(value) {
+  return {observation:'Recorded', 'in-progress':'Recorded', unverified:'Unverified', verified:'Verified'}[value] || 'Recorded';
+}
 export const blankNotebook = () => ({
   schema: SCHEMA,
   title: "Lab Notebook",
