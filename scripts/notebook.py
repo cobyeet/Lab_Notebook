@@ -335,6 +335,8 @@ def main():
     c.add_argument('--dry-run',action='store_true',help='Validate without saving')
     v=commands.add_parser('validate',help='Validate a notebook backup')
     v.add_argument('file',type=Path)
+    p=commands.add_parser('verify-preservation',help='Check that a post-update backup preserves an existing notebook')
+    p.add_argument('baseline',type=Path,help='Private notebook backup saved before the software update')
     s=commands.add_parser('serve',help='Serve the built website and local API on loopback only')
     s.add_argument('--port',type=int,default=8787)
     s.add_argument('--static',type=Path,default=ROOT/'dist')
@@ -348,6 +350,25 @@ def main():
         elif args.command=='validate':
             if not args.file.is_file():raise ValueError('Backup file does not exist')
             result=dict(valid=True,entries=len(read(args.file)['entries']))
+        elif args.command=='verify-preservation':
+            if not args.baseline.is_file() or not args.notebook.is_file():
+                raise ValueError('Both the baseline and post-update notebook files must exist')
+            if os.path.samefile(args.baseline,args.notebook):
+                raise ValueError('Use separate pre-update and post-update backup files')
+            before=read(args.baseline)
+            after=read(args.notebook)
+            if not before['entries'] and before.get('draft') is None:
+                raise ValueError('The baseline is empty; locate the existing notebook before verifying an update')
+            saved={e['id']:e for e in after['entries']}
+            missing=sum(e['id'] not in saved for e in before['entries'])
+            changed=sum(e['id'] in saved and saved[e['id']]!=e for e in before['entries'])
+            fields=sum(k not in after or after[k]!=v for k,v in before.items() if k!='entries')
+            if missing or changed or fields:
+                raise ValueError(f'Notebook preservation failed: {missing} missing entries, {changed} changed entries, {fields} changed notebook fields. Preserve both files and inspect the differences; do not overwrite newer work.')
+            result=dict(preserved=True,entries=len(before['entries']),
+                attachments=sum(len(e['attachments']) for e in before['entries']),
+                revisions=sum(len(e.get('revisions',[])) for e in before['entries']),
+                new_entries=len(after['entries'])-len(before['entries']))
         elif args.command=='contribute':
             payload=json.loads(sys.stdin.read() if args.input=='-' else Path(args.input).read_text(encoding='utf-8'))
             if args.dry_run:

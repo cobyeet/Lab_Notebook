@@ -214,7 +214,7 @@ function renderPage(p) {
             `<button class="toc-row" data-go="${p.number}"><span class="date">${p.entry.date.replaceAll("-", "")}</span><span class="toc-project">${h(p.entry.project)}</span><span class="toc-title">${h(p.entry.title)}</span><span class="toc-page">${String(p.number).padStart(2, "0")} ↗</span></button>`,
         )
         .join("") ||
-      (readOnly ? '<div class="empty-state"><div class="empty-symbol">✧</div><h3>No milestones in this edition yet.</h3><p>Use the page arrows to read shared daily entries.</p></div>' : `<div class="empty-state"><div class="empty-symbol">✧</div><h3>Your next discovery starts here.</h3><p>Add your first entry. Mark significant work as a milestone to give it a place in the contents.</p><button class="button primary" data-new>Write the first entry ↗</button><button class="text-button" id="load-example">Explore an example notebook</button></div>`)
+      (notebook.entries.length ? `<div class="empty-state"><div class="empty-symbol">✧</div><h3>No milestones yet.</h3><p>Your ${notebook.entries.length} saved ${notebook.entries.length===1?'entry is':'entries are'} in the notebook. Use the page arrows or Explore to read them.</p><button class="button subtle" data-go="2">Read entries ↗</button></div>` : readOnly ? '<div class="empty-state"><div class="empty-symbol">✧</div><h3>No entries in this edition yet.</h3></div>' : `<div class="empty-state"><div class="empty-symbol">✧</div><h3>Start or restore your notebook.</h3><p>Already have a notebook? Restore your backup or return to the browser and address where you last used it.</p><button class="button primary" data-new>Write the first entry ↗</button><button class="text-button" data-restore>Restore existing notebook ↗</button><button class="text-button" id="load-example">Explore an example notebook</button></div>`)
     }</div><div class="contents-note"><span>✦</span><p>Only milestones appear here. The full notebook includes the everyday work that makes them possible.</p></div><div class="paper-footer"><span>PRIVATE RESEARCH NOTEBOOK</span><span>01</span></div></article>`;
   const e = p.entry;
   return `<article class="paper entry-paper" data-page="${p.number}" id="page-${p.number}"><div class="paper-topline"><span>${h(e.project)}</span><span>${e.date.replaceAll("-", "")}</span></div><div class="entry-meta"><span class="status ${h(e.status)}">${h(statusLabel(e.status))}</span>${e.significant ? '<span class="milestone">✦ MILESTONE</span>' : ""}${p.continuation ? "<span>CONTINUED</span>" : ""}</div><h2>${h(e.title)}</h2><div class="entry-body">${p.blocks
@@ -407,12 +407,14 @@ function bind() {
     toast("Backup downloaded. Keep this file somewhere safe.");
   };
   if ($("#restore")) $("#restore").onclick = () => $("#restore-input").click();
+  document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=()=>$("#restore-input").click());
   $("#restore-input").onchange = restore;
   if ($("#settings")) $("#settings").onclick = settings;
   if ($("#share")) $("#share").onclick = () => sharing.open();
   $("#export").onclick = openExport;
   if ($("#load-example"))
     $("#load-example").onclick = async () => {
+      if(notebook.entries.length || notebook.draft){toast('An example can only be opened in an empty notebook with no draft.',true);return;}
       const before = notebook;
       notebook = exampleNotebook();
       try {

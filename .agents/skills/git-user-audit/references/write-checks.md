@@ -77,6 +77,13 @@ governing source/contracts only when this change crosses a public boundary.
 Documentation/skill-only edits and private implementation details normally need
 no sibling-code audit; record that no shared runtime contract changed.
 
+When deploying notebook software, also complete the live-update preservation
+gate in the repository AGENTS.md. Keep validated private before/after backups,
+run `verify-preservation`, and inspect the real live reader after reload. A
+successful Git push, build, or Site deployment does not verify notebook data.
+Never stage the private backups or use an empty browser store as the baseline
+for a notebook known to contain records.
+
 | Contract owner | Boundary to check when changed | Relevant consumers |
 |---|---|---|
 | Notebook model | Schema version, entry IDs, fields, limits, drafts, revisions, attachment bytes and checksums | Browser storage/restore, Python CLI/API, exports, agents |

@@ -40,6 +40,18 @@ The example path above is user configuration, never an application assumption. T
 
 On small screens, the menu at the upper left contains settings and backup tools. Very long page content scrolls vertically within its paper; page turning remains horizontal.
 
+### Preserve your notebook when updating the website
+
+Website code and notebook records are stored separately. Keep the same address and browser profile, download a current JSON backup before an update, then reload the live site and download another backup. For a local file notebook, use copies of the canonical JSON before and after. Verify preservation with:
+
+```sh
+python3 scripts/notebook.py --notebook private-data/backups/after-update.json verify-preservation private-data/backups/before-update.json
+```
+
+The check reads both files without changing them. It validates original attachment checksums and requires all existing entry content, attachments, revisions, drafts, and notebook fields to remain unchanged. Newly added entries are allowed. Missing or changed records, invalid attachments, missing files, and an empty baseline fail with a nonzero exit status. Keep both files when investigating a mismatch; concurrent edits must not be overwritten with an older backup. Intentional schema migrations need a separate, verified preservation plan.
+
+An empty notebook in a different browser or at a new address is a separate workspace. Use **Restore existing notebook** with the verified backup after protecting any work already in that workspace. An empty contents page can also mean that no entries are marked as milestones; **Read entries** and **Explore** still show the saved entries. Agent-run deployments must follow the [live-update preservation gate](AGENTS.md#preserve-the-notebook-during-live-software-updates).
+
 ## Explore research while reading
 
 **Explore** sits alongside the chronological notebook and works in Read mode, including read-only reader editions. It has four views: **Map**, **Pages**, **Next steps**, and **Boards**. A page's **Connections** button opens its local map. Select a node or page to preview its contents, references, backlinks, and suggested connections; **Read page** returns to its dated notebook page. **Compare** opens two pages side by side. **Quick find** (`Cmd/Ctrl+K`) opens pages; type `>` for navigation commands. Internal links show a short preview on hover.

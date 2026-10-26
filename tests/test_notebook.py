@@ -78,6 +78,57 @@ class NotebookTest(unittest.TestCase):
         self.assertEqual(json.loads(created.stdout)['action'],'created')
         retry=subprocess.run(cmd,input=json.dumps(entry()),text=True,capture_output=True)
         self.assertEqual(json.loads(retry.stdout)['action'],'unchanged')
+    def test_preservation_gate_checks_records_attachments_history_and_settings(self):
+        csv=self.root/'table.csv';csv.write_text('label,value\ncontrol,1\ntest,2\n')
+        m.contribute(self.path,entry(),attachment_paths=[csv])
+        revised=m.read(self.path)['entries'][0];revised['body']='Revised observation'
+        m.contribute(self.path,revised,replace=True)
+        before=m.read(self.path)
+        before['workspace']=dict(bookmarks=[revised['id']],views=[])
+        before['draft']={**entry(),'id':'draft','created':revised['created'],'body':'Private draft'}
+        baseline=self.root/'before.json';m.write(baseline,before);baseline_bytes=baseline.read_bytes()
+        script=Path(__file__).parents[1]/'scripts/notebook.py'
+        cmd=[sys.executable,str(script),'--notebook',str(self.path),'verify-preservation',str(baseline)]
+        self.path.write_text(json.dumps(before,sort_keys=True))
+        result=subprocess.run(cmd,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),dict(preserved=True,entries=1,attachments=1,revisions=1,new_entries=0))
+        extra={**entry(),'id':'new-entry','created':revised['created']}
+        added=json.loads(json.dumps(before));added['entries'].append(extra);m.write(self.path,added)
+        result=subprocess.run(cmd,text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(json.loads(result.stdout)['new_entries'],1)
+        for change in ['missing entry','replaced ID','changed body','missing attachment','changed attachment bytes','missing history','changed draft','missing settings','bad checksum']:
+            candidate=json.loads(json.dumps(before))
+            if change=='missing entry':candidate['entries']=[]
+            elif change=='replaced ID':candidate['entries'][0]['id']='replacement'
+            elif change=='changed body':candidate['entries'][0]['body']='Different observation'
+            elif change=='missing attachment':candidate['entries'][0]['attachments']=[]
+            elif change=='changed attachment bytes':
+                other=self.root/'other.csv';other.write_text('label,value\ncontrol,99\n')
+                candidate['entries'][0]['attachments']=[m.attach(other)]
+            elif change=='missing history':candidate['entries'][0]['revisions']=[]
+            elif change=='changed draft':candidate['draft']=None
+            elif change=='missing settings':del candidate['workspace']
+            elif change=='bad checksum':candidate['entries'][0]['attachments'][0]['sha256']='invalid'
+            with self.subTest(change=change):
+                self.path.write_text(json.dumps(candidate));after_bytes=self.path.read_bytes()
+                result=subprocess.run(cmd,text=True,capture_output=True)
+                self.assertEqual(result.returncode,1,result.stdout)
+                self.assertIn('error',json.loads(result.stderr))
+                self.assertEqual(self.path.read_bytes(),after_bytes)
+                self.assertEqual(baseline.read_bytes(),baseline_bytes)
+    def test_preservation_gate_rejects_empty_missing_and_same_file_baselines(self):
+        script=Path(__file__).parents[1]/'scripts/notebook.py'
+        baseline=self.root/'before.json'
+        cmd=[sys.executable,str(script),'--notebook',str(self.path),'verify-preservation',str(baseline)]
+        result=subprocess.run(cmd,text=True,capture_output=True)
+        self.assertEqual(result.returncode,1);self.assertFalse(self.path.exists());self.assertFalse(baseline.exists())
+        m.write(baseline,m.blank());m.write(self.path,m.blank())
+        result=subprocess.run(cmd,text=True,capture_output=True)
+        self.assertEqual(result.returncode,1);self.assertIn('baseline is empty',json.loads(result.stderr)['error'])
+        m.contribute(self.path,entry())
+        result=subprocess.run(cmd[:-1]+[str(self.path)],text=True,capture_output=True)
+        self.assertEqual(result.returncode,1);self.assertIn('separate',json.loads(result.stderr)['error'])
     def test_api_conflicts_origin_and_static_isolation(self):
         static=self.root/'dist';static.mkdir();(static/'index.html').write_text('Notebook')
         m.contribute(self.path,entry())

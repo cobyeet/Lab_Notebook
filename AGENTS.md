@@ -108,6 +108,22 @@ An agent runner can invoke the CLI after the user requests the daily contributio
 
 Run `npm test`, `python3 -m unittest discover -s tests -p 'test_*.py'`, and `npm run build`. The built assets use relative URLs for domain/subdirectory portability. Preserve the canonical schema or provide a tested migration. Browser-only mode must remain functional without the local service.
 
+## Preserve the notebook during live software updates
+
+This is a required completion gate for every update to an existing live notebook. Updating website code does not transfer browser storage. Preserve the configured live address, notebook storage namespace, hosting identity, and access settings. Never bundle research records into public assets or Git to make a notebook appear populated.
+
+1. Identify the owner's actual notebook and browser profile before deployment. Inspect existing private configuration, source catalog, and backups. An empty browser store or missing default JSON file does not establish that the owner's notebook is empty. For a notebook known to contain entries, locate its existing records instead of starting a blank notebook or loading examples.
+2. Save and validate a current private JSON backup, including attachments, drafts, workspace settings, and revisions. Record the live origin/path and storage mode in private deployment provenance. Keep owner recovery keys and token-bearing reader URLs separate from notebook backups and logs.
+3. Deploy the software while preserving stored records. Storage-key, origin/path, and schema changes require an explicit, tested migration or backup/restore plan. Do not clear storage, seed example data, replace the canonical notebook, or republish research entries as part of a code update.
+4. Reload the same live notebook in the owner's browser. Download a fresh post-update backup and run the read-only check below. It validates attachment checksums and compares every existing entry, its complete attachments and revision history, and existing notebook fields. Additional entries are allowed; altered or missing existing records fail. An empty baseline fails. Inspect concurrent work or a planned migration on a mismatch; never restore an older copy over newer work automatically.
+5. Confirm that the existing entries and original figures are visible in the live reader, and that reader editions and links remain available if sharing is configured. If another browser profile must be used, back up its current state, then restore the verified existing notebook through the review dialog when it will not overwrite unrelated or newer work. Recheck after reload. Finish only after preservation passes; a successful build or deployment alone is insufficient. Retain the private before/after backups and report any verification limit explicitly.
+
+```sh
+python3 scripts/notebook.py --notebook private-data/backups/after-update.json verify-preservation private-data/backups/before-update.json
+```
+
+This checks existing records without saving, merging, or publishing them. It does not provide cross-device synchronization or replace independent backups. Initial deployments with no existing records must be identified as new notebooks, never used as evidence that a returning owner's records were preserved.
+
 ## Reader publication
 
 Daily contributions update only the canonical local notebook. Do not publish entries, create reader links, or disclose the separate owner recovery key as part of a daily contribution unless the user explicitly requests that action. Supabase sharing is an explicit snapshot adapter, not automatic cloud synchronization. Never commit owner keys or private link tokens. Reader URLs contain secrets in their fragment; do not log them or include them in handoff files by default.
