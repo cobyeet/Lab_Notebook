@@ -9,3 +9,6 @@ __pycache__/
 
 # Optional deployment identity; example is portable and tracked.
 public/notebook-config.json
+
+# Separate private sharing recovery files.
+lab-notebook-owner-key*.json

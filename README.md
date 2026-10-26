@@ -87,9 +87,36 @@ Original files stay in the source package without recoloring, resampling, or aut
 
 `npm run build` produces `dist/` with relative asset URLs. Serve that directory at a domain root or a subdirectory such as `/lab-notebook/`. No particular domain or hosting service is required. Notebook names and authors are data, not code.
 
-A static deployment uses IndexedDB in that browser at that origin/path; it does **not** share storage with the local service, another device, or GitHub. Export a JSON backup and restore it to move data. Read and Contribute are UI modes, not authentication roles. Use a private hosting access gate for private site access. Browser storage relies on the device/browser account and is not application-encrypted. Clearing website data can remove it: keep backups.
+A static deployment uses IndexedDB in that browser at that origin/path; it does **not** share working storage with the local service, another device, or GitHub. Export a JSON backup and restore it to move data. Read and Contribute in the local workspace are interface modes. Browser storage relies on the device/browser account and is not application-encrypted. Clearing website data can remove it: keep backups.
 
-The local service provides actual shared file persistence for agents and the browser. Remote agent writes require a future authenticated storage adapter; do not publish the loopback service or place the notebook JSON into public static assets. Selective public publishing, remote authenticated writes, and multi-user collaboration are roadmap features rather than present capabilities.
+The local service provides shared file persistence for agents and the browser. Do not expose the loopback service publicly. Remote agent writes and automatic synchronization remain future authenticated-adapter work.
+
+## Private reader links
+
+The optional Supabase adapter publishes explicitly selected snapshots. Readers open a revocable link without a ChatGPT account, email service, or sign-in. Each link sees the same selected edition and permits reading/exporting, never publishing or editing. Anyone holding a link can use it, so treat it as private. Create a separate labeled link for each person to revoke them independently.
+
+1. Create your own Supabase project and apply the migrations in `supabase/migrations/` in filename order. The first migration provides an optional email-auth schema; the current website uses the separate capability-link adapter in the second migration. Email delivery is not required.
+2. Add your API URL and **publishable** key to the ignored `public/notebook-config.json`, following the example below. Build and deploy normally. Never use a secret/service-role key in client files.
+3. Open **Reader links → Set up reader links**. The browser generates a random owner key and downloads a recovery file. Keep it private; it controls publishing and revocation. It is separate from notebook-data backups.
+4. Select saved entries, optionally include attachments, and click **Publish selected entries**. Nothing is selected initially. Drafts, earlier revisions, and unknown metadata are removed in both the client and database. Limit: 10 MB per shared edition. Publication replaces the previous shared snapshot, with an optimistic revision check.
+5. Create a labeled reader link and send it to your reader. New local work remains private until you explicitly publish again. **Revoke** blocks subsequent reads; an open reader checks every 10 seconds and clears denied content. Copies someone already downloaded cannot be recalled.
+
+```json
+{
+  "brandName": "Your lab",
+  "brandSubtitle": "RESEARCH NOTEBOOK",
+  "cloud": {
+    "url": "https://YOUR-PROJECT.supabase.co",
+    "publishableKey": "sb_publishable_YOUR_KEY"
+  }
+}
+```
+
+The reusable repository contains no project identity or credentials. Without cloud configuration the local notebook still works. Keep the configured public file in your deployment, outside software Git history if preferred. Changing hosting origins requires restoring the notebook backup and owner recovery file in the new browser storage location. Restoring an older owner-key backup still manages the same edition; old reader URLs are hashed on the server and cannot be recovered from the database, so issue a replacement link if its local copy was lost.
+
+The database denies direct table access. Narrow functions check distinct random 256-bit owner and reader capabilities; only SHA-256 hashes are stored. Reader keys remain in the URL fragment, which is excluded from HTTP navigation requests, and travel only in HTTPS API request bodies. The reader route never loads or saves the local working notebook. Owner functions deliberately use `SECURITY DEFINER`, an empty search path, and explicit token checks; Supabase's [public function advisory](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable) flags their intentional API execution grants. The [RLS without policies notice](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) reflects the deliberate denial of all direct table access. Tests verify permissions under actual PostgreSQL roles. Public creation of empty editions is available to adopters of this simple adapter; production deployments with broad traffic may add creation quotas or an authenticated owner bootstrap.
+
+Shared entries and included attachments live in your Supabase project's PostgreSQL database, in the region you selected. This adapter embeds attachments with the edition; it does not use a public Storage bucket or commit research entries to GitHub. Your local canonical notebook and its backups remain independent.
 
 ## Development
 
@@ -99,11 +126,11 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 npm run build
 ```
 
-The tests cover page ordering, stable links, exact selected text, CSV parsing, source export structure, MAT bytes, idempotency, revision history, concurrent writers, attachment checksums, HTTP conflicts, and origin isolation. API tests need permission to bind a temporary loopback port.
+The tests cover page ordering, stable links, exact selected text, CSV parsing, source export structure, MAT bytes, idempotency, revision history, concurrent writers, attachment checksums, HTTP conflicts, origin isolation, private snapshot filtering, reader denial of writes, wrong-key denial, and link revocation. PostgreSQL permission tests use an isolated PGlite database. API tests need permission to bind a temporary loopback port.
 
 ## Useful next additions
 
-1. **Private review → selected public edition:** A separate publish command with a complete preview and explicit allowlist; default publication excludes attachments until individually selected.
+1. **More publishing controls:** Distinct editions per audience, optional expiry dates, and a preview of changes since the last publication. Current private links share one explicit edition; attachments are omitted by default.
 2. **Remote storage and agent authentication:** A standard authenticated API, per-notebook scopes, device sync, and revocable agent credentials. Keep the local file adapter available.
 3. **Evidence-aware daily inbox:** Stage suggested entries from authorized repository/chat sources, flag missing evidence, and ask for offline work before finalizing a day's record.
 4. **Experiment and dataset links:** Deidentified experiment IDs, protocol versions, analysis commits, parameters, and original-data checksums; keep raw participant data in protected storage.

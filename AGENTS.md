@@ -53,3 +53,7 @@ An agent runner can invoke the CLI after the user requests the daily contributio
 ## Development verification
 
 Run `npm test`, `python3 -m unittest discover -s tests -p 'test_*.py'`, and `npm run build`. The built assets use relative URLs for domain/subdirectory portability. Preserve the canonical schema or provide a tested migration. Browser-only mode must remain functional without the local service.
+
+## Reader publication
+
+Daily contributions update only the canonical local notebook. Do not publish entries, create reader links, or disclose the separate owner recovery key as part of a daily contribution unless the user explicitly requests that action. Supabase sharing is an explicit snapshot adapter, not automatic cloud synchronization. Never commit owner keys or private link tokens. Reader URLs contain secrets in their fragment; do not log them or include them in handoff files by default.
