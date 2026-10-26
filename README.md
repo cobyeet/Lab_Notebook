@@ -2,6 +2,14 @@
 
 A private-first, portable lab notebook for the daily work behind research. A dark, sand-and-amber website for reading; a contribution workspace for writing; a headless interface for agents. No account names, personal paths, fixed project list, or domain-specific configuration is required.
 
+## Make it yours
+
+Download the repository source or clone your own fork, then open a terminal in that folder. Start with the local setup below for a notebook shared with agents. For a browser-only notebook, use `npm ci`, `npm run build`, and `npm run preview`; Python is only needed for the CLI and local file service. Open the printed address rather than opening `index.html` directly.
+
+Each researcher starts with an empty notebook. No research entries, owner recovery keys, or deployment configuration are distributed with the source. Customize the name and author in **Settings**, then add your first entry in **Contribute**. Export a JSON backup after saving it and keep backups outside the software checkout. Explore, reading, writing, and exports work without a cloud account. GitHub and Axi are only needed for contributing software; Supabase is optional for private reader links.
+
+Share a fork or the repository source with other researchers. Keep `private-data/`, downloaded notebook backups, owner recovery files, and your configured `public/notebook-config.json` private. A built `dist/` folder can include that deployment configuration; create a fresh build from your own configuration before hosting it. Shared hosting does not provide shared working storage: use explicit reader publication for a read-only edition.
+
 ## Start a notebook shared with agents
 
 Requirements: Node.js 22.12+ and Python 3.9+.
@@ -144,7 +152,15 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 npm run build
 ```
 
-The tests cover page ordering, stable links, exact selected text, CSV parsing, source export structure, MAT bytes, idempotency, revision history, concurrent writers, attachment checksums, HTTP conflicts, origin isolation, private snapshot filtering, reader denial of writes, wrong-key denial, and link revocation. PostgreSQL permission tests use an isolated PGlite database. API tests need permission to bind a temporary loopback port.
+The tests cover page ordering, stable links, exact selected text, CSV parsing, source export structure, MAT bytes, idempotency, revision history, concurrent writers, attachment checksums, HTTP conflicts, origin isolation, private snapshot filtering, reader denial of writes, wrong-key denial, and link revocation. PostgreSQL permission tests use an isolated PGlite database. API tests need permission to bind a temporary loopback port. GitHub Actions runs these checks and a production build on Linux and Windows. Dependencies are pinned in the manifest and lockfile; use `npm ci` for a reproducible installation.
+
+### Software contributions and Git audit
+
+The repository bundles the [Git user audit workflow](.agents/skills/git-user-audit/SKILL.md), its [scaling rules](.agents/skills/git-user-audit/references/scaling.md), and [write checks](.agents/skills/git-user-audit/references/write-checks.md). [AGENTS.md](AGENTS.md) routes compatible agents to it. Other agents can read the same instructions directly; no global skill installation is required.
+
+The workflow checks the current account and destination, available integration updates, relevant own-branch work, exact staged/outgoing changes, private data, and affected notebook interfaces. It does not automatically pull, merge, delete branches, install hooks, or grant permission to publish. Supported GitHub actions use `npx -y gh-axi`; local status, diffs, commits, and pushes use native Git. Axi needs Node.js and an authenticated GitHub CLI (`gh auth login`), uses that existing login, and requires no global Axi installation. Start with `npx -y gh-axi --help`.
+
+For a contribution, work on a branch in your fork, keep research data and credentials out of the change, run the checks above, and open a pull request explaining the behavior and validation. Changes to notebook fields must preserve schema-1 backups or include a tested migration across the browser, Python CLI/API, exports, and reader projection. Run `npm audit` when preparing a release. Never publish real research fixtures merely to demonstrate a passing test.
 
 ## Useful next additions
 

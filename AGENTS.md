@@ -2,6 +2,8 @@
 
 This repository supplies a reusable private lab notebook. Software is tracked in Git; research entries and attachments live in an ignored canonical JSON file or browser storage. Never commit private notebook contents to the software repository. No personal paths, accounts, project lists, or domain names may be required by application code.
 
+Use [git-user-audit](.agents/skills/git-user-audit/SKILL.md) before agent-run Git operations and equivalent GitHub actions. It checks the acting account, destination, available integration updates, relevant branch work, publication scope, and sensitive data. Use Axi for supported GitHub actions and native Git for local operations. The workflow is advisory about other work and grants no additional permission to publish, merge, delete branches, or rewrite history. It does not install hooks or change anyone's global configuration.
+
 Use `.agents/skills/lab-notebook-daily/SKILL.md` when asked for a daily contribution. This is an on-demand workflow; installing the skill does not create a schedule or grant access to every chat.
 
 ## Daily notebook hub
@@ -42,7 +44,7 @@ Each entry must connect:
 
 Use goals and rationale established by the user, prior entries, or supporting evidence. Ask briefly when material context is missing; otherwise identify the gap concisely. Never invent a long-term goal, retrofit an unsupported scientific justification, or substitute vague claims such as "supports future research" for a concrete connection. Preserve essential parameters and provenance; place detailed logs, code changes, and supporting material in attachments or `sources` rather than expanding the narrative. Do not repeat the same information across fields.
 
-Use short Markdown links, `[descriptive text](https://...)`, whenever a relevant function, figure, dataset, result, or protocol has a verified destination. Prefer GitHub links to the exact file/function at the recorded commit, with checked line anchors when useful, and established SandLab Webdisk URLs for hosted artifacts. Assume readers already have access to both services; do not add login instructions or access disclaimers. Keep full URLs out of the visible prose. Obtain URLs from inspected repository metadata, existing artifact links, or supplied configuration; never guess a Webdisk URL from a mounted filesystem path. If a destination cannot be established, leave its description unlinked and identify any material missing reference concisely. Preserve normal URL encoding and never include credentials or private sharing tokens in notebook links.
+Use short Markdown links, `[descriptive text](https://...)`, whenever a relevant function, figure, dataset, result, or protocol has a verified destination. Prefer repository links to the exact file/function at the recorded commit, with checked line anchors when useful, and the owner's configured artifact host for figures, data, or protocols. Assume readers already have access to the linked services; do not add login instructions or access disclaimers. Keep full URLs out of the visible prose. Obtain URLs from inspected repository metadata, existing artifact links, or supplied configuration; never guess a hosted URL from a mounted filesystem path. If a destination cannot be established, leave its description unlinked and identify any material missing reference concisely. Preserve normal URL encoding and never include credentials or private sharing tokens in notebook links.
 
 ## Figures and saved analysis sources
 

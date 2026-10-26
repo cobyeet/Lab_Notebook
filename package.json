@@ -11,15 +11,15 @@
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
-    "fflate": "^0.8.2",
-    "jspdf": "^4.0.0",
-    "jspdf-autotable": "^5.0.2",
-    "papaparse": "^5.5.3"
+    "@supabase/supabase-js": "2.118.0",
+    "fflate": "0.8.3",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.9",
+    "papaparse": "5.7.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.12",
-    "vite": "^7.3.1"
+    "@electric-sql/pglite": "0.5.12",
+    "vite": "7.3.7"
   },
   "engines": {
     "node": ">=22.12.0"
