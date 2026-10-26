@@ -10,6 +10,7 @@ import {
 } from "./model.js";
 import { readNotebook, writeNotebook } from "./storage.js";
 import { saveFile, exportBundle } from "./exports.js";
+let branding = { brandName: "FIELDNOTES", brandSubtitle: "A LAB NOTEBOOK" };
 const icons = {
   book: "▤",
   arrow: "↗",
@@ -39,6 +40,18 @@ const localDate = () =>
     .toISOString()
     .slice(0, 10);
 async function load() {
+  try {
+    const response = await fetch("./notebook-config.json");
+    if (
+      response.ok &&
+      response.headers.get("content-type")?.includes("application/json")
+    ) {
+      const config = await response.json();
+      for (const key of ["brandName", "brandSubtitle"])
+        if (typeof config[key] === "string" && config[key].length <= 100)
+          branding[key] = config[key];
+    }
+  } catch {}
   let r;
   try {
     r = await fetch("./api/notebook", { cache: "no-store" });
@@ -125,7 +138,7 @@ function render() {
   rebuild();
   const projects = [...new Set(notebook.entries.map((e) => e.project))].sort();
   $("#app").innerHTML =
-    `<div class="app-shell"><aside class="sidebar"><a class="brand" href="#contents" aria-label="Go to contents"><span class="brand-icon">${icons.book}</span><span>FIELDNOTES<small>A LAB NOTEBOOK</small></span></a><div class="workspace-label">YOUR WORKSPACE</div><button class="side-link selected" id="contents-link"><span>▤</span> Notebook <span class="count">${notebook.entries.length}</span></button><button class="side-link" id="new-side"><span>＋</span> New entry</button><div class="project-heading">PROJECTS<button id="clear-filter" title="Show all projects">All</button></div><div class="projects">${projects.length ? projects.map((p, i) => `<button class="project ${filter === p ? "active" : ""}" data-project="${h(p)}"><i style="--dot:${["#648d78", "#b49a6a", "#788aab", "#ac7e72"][i % 4]}"></i>${h(p)}<span>${notebook.entries.filter((e) => e.project === p).length}</span></button>`).join("") : '<p class="side-muted">Projects appear as you write.</p>'}</div><div class="sidebar-bottom"><div class="storage-card"><span class="privacy-dot"></span><b>Private by default</b><p>${server ? "Saved to your local notebook service. Agents can contribute." : "Saved in this browser. Download a backup to keep a portable copy."}</p><span class="storage-label">${server ? "LOCAL SERVICE CONNECTED" : "BROWSER STORAGE"}</span></div><button class="side-link" id="backup"><span>↓</span> Back up notebook</button><button class="side-link" id="restore"><span>↑</span> Restore backup</button><button class="side-link" id="settings"><span>⚙</span> Notebook settings</button></div></aside><main><header class="topbar"><button id="mobile-menu" aria-label="Open notebook menu">☰</button><div class="breadcrumbs">Workspace <span>/</span> <b>Notebook</b></div><div class="top-actions"><div class="mode-switch" aria-label="Notebook mode"><button id="read-mode" class="${mode === "read" ? "active" : ""}">Read</button><button id="contribute-mode" class="${mode === "contribute" ? "active" : ""}">Contribute</button></div><button class="button subtle" id="export">${icons.download} Export</button></div></header><section class="notebook-heading"><div><div class="eyebrow">THE RESEARCH, AS IT HAPPENS</div><h1>${h(notebook.title)}</h1><p>${h(notebook.subtitle)}</p></div><button class="button primary" id="new-entry">＋ New entry</button></section><div class="book-toolbar"><div class="book-label"><span class="green-dot"></span>${filter ? h(filter) : "All projects"}<span class="divider"></span><span>${query ? `${visible.length - 1} matching pages` : `${notebook.entries.length} ${notebook.entries.length === 1 ? "entry" : "entries"} · ${pages.length} ${pages.length === 1 ? "page" : "pages"}`}</span></div><label class="search">${icons.search}<input id="search" placeholder="Find in notebook…" value="${h(query)}" aria-label="Search notebook"></label></div><div class="reading-room"><div class="book-track" id="book" tabindex="0" aria-label="Notebook pages. Scroll left for older entries.">${visible.map(renderPage).join("")}</div></div><footer class="reader-footer"><span class="scroll-hint">← Scroll left to turn the page <span>·</span> Newest entries first</span><div class="page-navigation"><button id="older" aria-label="Older page">←</button><label>Page <input id="page-number" type="number" min="1" max="${pages.length}" value="${current}" aria-label="Go to page"> of <span>${pages.length}</span></label><button id="newer" aria-label="Newer page">→</button></div><button class="text-button" id="to-contents">Back to contents ↗</button></footer></main></div><div id="toast" role="status"></div><dialog id="editor"></dialog><dialog id="export-dialog"></dialog><dialog id="settings-dialog"></dialog><dialog id="restore-dialog"></dialog><input type="file" id="restore-input" accept=".json,application/json" hidden>`;
+    `<div class="app-shell"><aside class="sidebar"><a class="brand" href="#contents" aria-label="Go to contents"><span class="brand-icon"><svg viewBox="0 0 28 34" aria-hidden="true"><path d="M3 2h22M3 32h22M6 3c0 8 16 10 16 14S6 23 6 31M22 3c0 8-16 10-16 14s16 6 16 14M9 7h10M11 27h6"/></svg></span><span class="brand-wordmark">${h(notebook.brandName ?? branding.brandName)}<small>${h(notebook.brandSubtitle ?? branding.brandSubtitle)}</small></span></a><div class="workspace-label">YOUR WORKSPACE</div><button class="side-link selected" id="contents-link"><span>▤</span> Notebook <span class="count">${notebook.entries.length}</span></button><button class="side-link" id="new-side"><span>＋</span> New entry</button><div class="project-heading">PROJECTS<button id="clear-filter" title="Show all projects">All</button></div><div class="projects">${projects.length ? projects.map((p, i) => `<button class="project ${filter === p ? "active" : ""}" data-project="${h(p)}"><i style="--dot:${["#648d78", "#b49a6a", "#788aab", "#ac7e72"][i % 4]}"></i>${h(p)}<span>${notebook.entries.filter((e) => e.project === p).length}</span></button>`).join("") : '<p class="side-muted">Projects appear as you write.</p>'}</div><div class="sidebar-bottom"><div class="storage-card"><span class="privacy-dot"></span><b>Private by default</b><p>${server ? "Saved to your local notebook service. Agents can contribute." : "Saved in this browser. Download a backup to keep a portable copy."}</p><span class="storage-label">${server ? "LOCAL SERVICE CONNECTED" : "BROWSER STORAGE"}</span></div><button class="side-link" id="backup"><span>↓</span> Back up notebook</button><button class="side-link" id="restore"><span>↑</span> Restore backup</button><button class="side-link" id="settings"><span>⚙</span> Notebook settings</button></div></aside><main><header class="topbar"><button id="mobile-menu" aria-label="Open notebook menu">☰</button><div class="breadcrumbs">Workspace <span>/</span> <b>Notebook</b></div><div class="top-actions"><div class="mode-switch" aria-label="Notebook mode"><button id="read-mode" class="${mode === "read" ? "active" : ""}">Read</button><button id="contribute-mode" class="${mode === "contribute" ? "active" : ""}">Contribute</button></div><button class="button subtle" id="export">${icons.download} Export</button></div></header><section class="notebook-heading"><div><div class="eyebrow">THE RESEARCH, AS IT HAPPENS</div><h1>${h(notebook.title)}</h1><p>${h(notebook.subtitle)}</p></div><button class="button primary" id="new-entry">＋ New entry</button></section><div class="book-toolbar"><div class="book-label"><span class="green-dot"></span>${filter ? h(filter) : "All projects"}<span class="divider"></span><span>${query ? `${visible.length - 1} matching pages` : `${notebook.entries.length} ${notebook.entries.length === 1 ? "entry" : "entries"} · ${pages.length} ${pages.length === 1 ? "page" : "pages"}`}</span></div><label class="search">${icons.search}<input id="search" placeholder="Find in notebook…" value="${h(query)}" aria-label="Search notebook"></label></div><div class="reading-room"><div class="book-track" id="book" tabindex="0" aria-label="Notebook pages. Scroll left for older entries.">${visible.map(renderPage).join("")}</div></div><footer class="reader-footer"><span class="scroll-hint">← Scroll left to turn the page <span>·</span> Newest entries first</span><div class="page-navigation"><button id="older" aria-label="Older page">←</button><label>Page <input id="page-number" type="number" min="1" max="${pages.length}" value="${current}" aria-label="Go to page"> of <span>${pages.length}</span></label><button id="newer" aria-label="Newer page">→</button></div><button class="text-button" id="to-contents">Back to contents ↗</button></footer></main></div><div id="toast" role="status"></div><dialog id="editor"></dialog><dialog id="export-dialog"></dialog><dialog id="settings-dialog"></dialog><dialog id="restore-dialog"></dialog><input type="file" id="restore-input" accept=".json,application/json" hidden>`;
   bind();
   const intended = visible.find((p) => p.number === current) || visible[0],
     book = $("#book"),
@@ -138,7 +151,7 @@ function render() {
 }
 function renderPage(p) {
   if (p.kind === "contents")
-    return `<article class="paper contents-paper" data-page="1" id="page-1"><div class="paper-topline"><span>${h(notebook.author || "RESEARCH JOURNAL")}</span><span>VOLUME 01</span></div><div class="contents-kicker">A RECORD OF QUESTIONS & DISCOVERIES</div><h2>Table of<br><em>contents.</em></h2><p class="paper-intro">The milestones that move the work forward.<br>Every observation has a place in the pages that follow.</p><div class="toc"><div class="toc-head"><span>DATE</span><span>PROJECT</span><span>ITEM</span><span>PAGE</span></div>${
+    return `<article class="paper contents-paper" data-page="1" id="page-1"><div class="paper-topline"><span>${h(notebook.author || notebook.brandName || branding.brandName)}</span><span>VOLUME 01</span></div><div class="contents-kicker">A RECORD OF QUESTIONS & DISCOVERIES</div><h2>Table of<br><em>contents.</em></h2><p class="paper-intro">The milestones that move the work forward.<br>Every observation has a place in the pages that follow.</p><div class="toc"><div class="toc-head"><span>DATE</span><span>PROJECT</span><span>ITEM</span><span>PAGE</span></div>${
       pages
         .filter((p) => p.entry?.significant && !p.continuation)
         .map(
@@ -364,7 +377,10 @@ function draftValue() {
   };
 }
 function openEditor(id) {
-  if (mode !== "contribute") { mode = "contribute"; render(); }
+  if (mode !== "contribute") {
+    mode = "contribute";
+    render();
+  }
   const source = id ? notebook.entries.find((e) => e.id === id) : null;
   if (source) {
     if (notebook.draft && notebook.draft.id !== id) {
@@ -565,7 +581,7 @@ function showAttachments() {
 }
 function openExport() {
   const dialog = $("#export-dialog");
-  dialog.innerHTML = `<form id="export-form"><div class="dialog-header"><div><div class="eyebrow">TAKE THE WORK WITH YOU</div><h2>Export notebook pages</h2></div><button class="close" type="button" data-close aria-label="Close export">×</button></div><label>Pages<input name="pages" value="${current}" placeholder="e.g. 1, 3-5" required></label><div class="quick-pages"><button type="button" id="all-pages">All pages</button><button type="button" id="current-page">Current page</button></div><div class="export-options">${[
+  dialog.innerHTML = `<form id="export-form"><div class="dialog-header"><div><div class="eyebrow">TAKE THE WORK WITH YOU</div><h2>Export notebook pages</h2></div><button class="close" type="button" data-close aria-label="Close export">×</button></div><label>Pages<input name="pages" value="${current}" placeholder="e.g. 1, 3-5" required></label><div class="quick-pages"><button type="button" id="all-pages">All pages</button><button type="button" id="current-page">Current page</button></div><div class="export-preset"><div class="editor-meta"><label>Export appearance<select name="theme"><option value="light" selected>Light · publication default</option><option value="dark">Dark · presentation</option></select></label><label>Figure width<select name="figureWidthMm"><option value="88">88 mm · single column</option><option value="180" selected>180 mm · double column</option></select></label></div><label>Figure height (mm)<input type="number" name="figureHeightMm" min="40" max="185" value="90" required></label><p class="preset-caption">Generated CSV figures: 5–7 pt sans-serif text, RGB, editable vector PDF, and 300 dpi PNG. Original artwork is retained; its lettering and resolution require source-level review. Notebook PDF pages stay A4.</p></div><div class="export-options">${[
     [
       "pdf",
       "Vector PDF",
@@ -605,6 +621,12 @@ function openExport() {
     ($("#export-form").elements.pages.value = `1-${pages.length}`);
   $("#current-page").onclick = () =>
     ($("#export-form").elements.pages.value = current);
+  $("#export-form").elements.figureWidthMm.onchange = (e) => {
+    const form = $("#export-form"),
+      single = e.target.value === "88";
+    form.elements.figureHeightMm.max = single ? 130 : 185;
+    form.elements.figureHeightMm.value = single ? 70 : 90;
+  };
   $("#export-form").onsubmit = async (e) => {
     e.preventDefault();
     const submit = e.submitter;
@@ -625,8 +647,17 @@ function openExport() {
         pages.filter((p) => numbers.includes(p.number)),
         pages,
         formats,
+        {
+          theme: e.target.elements.theme.value,
+          figureWidthMm: Number(e.target.elements.figureWidthMm.value),
+          figureHeightMm: Number(e.target.elements.figureHeightMm.value),
+        },
       );
-      saveFile("lab-notebook-export.zip", data, "application/zip");
+      saveFile(
+        `lab-notebook-export-${e.target.elements.theme.value}.zip`,
+        data,
+        "application/zip",
+      );
       dialog.close();
       toast("Export downloaded.");
     } catch (err) {
@@ -640,12 +671,18 @@ function openExport() {
 }
 function settings() {
   const dialog = $("#settings-dialog");
-  dialog.innerHTML = `<form id="settings-form"><div class="dialog-header"><h2>Make it your notebook</h2><button type="button" class="close" data-close aria-label="Close settings">×</button></div><label>Notebook title<input name="title" required maxlength="200" value="${h(notebook.title)}"></label><label>Subtitle<input name="subtitle" maxlength="500" value="${h(notebook.subtitle)}"></label><label>Researcher or lab<input name="author" maxlength="200" value="${h(notebook.author)}" placeholder="Optional"></label><p class="export-note">${server ? "The local service and headless CLI share the same notebook file." : "This notebook lives in browser storage on this device and website address. Back up regularly. A hosted sign-in gate protects site access; Read and Contribute are interface modes."} Publishing selected entries will be a separate, explicit step.</p><div class="dialog-footer"><span>Portable by design</span><button class="button primary">Save settings</button></div></form>`;
+  dialog.innerHTML = `<form id="settings-form"><div class="dialog-header"><h2>Make it your notebook</h2><button type="button" class="close" data-close aria-label="Close settings">×</button></div><div class="editor-meta"><label>Lab / brand name<input name="brandName" maxlength="100" value="${h(notebook.brandName ?? branding.brandName)}"></label><label>Brand subtitle<input name="brandSubtitle" maxlength="100" value="${h(notebook.brandSubtitle ?? branding.brandSubtitle)}"></label></div><label>Notebook title<input name="title" required maxlength="200" value="${h(notebook.title)}"></label><label>Subtitle<input name="subtitle" maxlength="500" value="${h(notebook.subtitle)}"></label><label>Researcher or lab<input name="author" maxlength="200" value="${h(notebook.author)}" placeholder="Optional"></label><p class="export-note">${server ? "The local service and headless CLI share the same notebook file." : "This notebook lives in browser storage on this device and website address. Back up regularly. A hosted sign-in gate protects site access; Read and Contribute are interface modes."} Publishing selected entries will be a separate, explicit step.</p><div class="dialog-footer"><span>Portable by design</span><button class="button primary">Save settings</button></div></form>`;
   dialog.querySelector("[data-close]").onclick = () => dialog.close();
   $("#settings-form").onsubmit = async (e) => {
     e.preventDefault();
     const before = structuredClone(notebook);
-    for (const key of ["title", "subtitle", "author"])
+    for (const key of [
+      "title",
+      "subtitle",
+      "author",
+      "brandName",
+      "brandSubtitle",
+    ])
       notebook[key] = e.target.elements[key].value;
     try {
       await persist();

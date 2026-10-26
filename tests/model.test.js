@@ -9,7 +9,12 @@ import {
   numericTable,
   validateNotebook,
 } from "../src/model.js";
-import { handoff, matV4, exportBundle } from "../src/exports.js";
+import {
+  handoff,
+  matV4,
+  exportBundle,
+  exportSettings,
+} from "../src/exports.js";
 import { unzipSync, strFromU8 } from "fflate";
 
 test("contents first, newest entries first, stable links survive insertion", () => {
@@ -127,4 +132,49 @@ test("export ZIP includes real PDF, MAT data, portable figure scripts, and prove
   );
   assert.equal(JSON.parse(strFromU8(z["notebook.json"])).entries.length, 1);
   assert.ok(z["EXPORT_SCOPE.txt"]);
+});
+
+test("export appearance defaults to light, independent of the dark reader", async () => {
+  assert.equal(exportSettings().theme, "light");
+  assert.deepEqual(
+    [exportSettings().figureWidthMm, exportSettings().figureHeightMm],
+    [180, 90],
+  );
+  assert.equal(exportSettings({ figureWidthMm: 88 }).figureHeightMm, 70);
+  for (const bad of [
+    { theme: "auto" },
+    { figureWidthMm: 183 },
+    { figureWidthMm: 88, figureHeightMm: 131 },
+    { figureHeightMm: 0 },
+  ])
+    assert.throws(() => exportSettings(bad));
+  const n = exampleNotebook(),
+    p = paginate(n.entries),
+    before = JSON.stringify(n);
+  const light = unzipSync(
+    await exportBundle(n, [p[1]], p, ["pdf", "mat", "python"]),
+  );
+  const dark = unzipSync(
+    await exportBundle(n, [p[1]], p, ["pdf", "mat", "python"], {
+      theme: "dark",
+      figureWidthMm: 88,
+      figureHeightMm: 70,
+    }),
+  );
+  assert.equal(
+    JSON.parse(strFromU8(light["export-settings.json"])).theme,
+    "light",
+  );
+  assert.equal(
+    JSON.parse(strFromU8(dark["export-settings.json"])).theme,
+    "dark",
+  );
+  assert.ok(light["fonts/LiberationSans-Regular.ttf"].length > 10000);
+  assert.ok(light["fonts/LICENSE.txt"]);
+  assert.deepEqual(
+    JSON.parse(strFromU8(light["notebook.json"])).entries,
+    JSON.parse(strFromU8(dark["notebook.json"])).entries,
+  );
+  assert.equal(JSON.stringify(n), before);
+  assert.notDeepEqual(light["notebook.pdf"], dark["notebook.pdf"]);
 });

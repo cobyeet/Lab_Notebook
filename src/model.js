@@ -135,6 +135,8 @@ export function validateNotebook(value, preserveDraft = false) {
   string(value.title, 200, "title");
   string(value.subtitle ?? "", 500, "subtitle");
   string(value.author ?? "", 200, "author");
+  for (const key of ["brandName", "brandSubtitle"])
+    if (value[key] !== undefined) string(value[key], 100, key);
   const ids = new Set();
   for (const e of value.entries) {
     string(e.id, 100, "entry ID");

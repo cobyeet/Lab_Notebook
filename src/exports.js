@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { zipSync, strToU8 } from "fflate";
 import { numericTable, paginate } from "./model.js";
+import { pythonFigures, matlabFigures } from "./figure-templates.js";
 export function saveFile(name, data, type = "application/octet-stream") {
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement("a");
@@ -133,7 +134,42 @@ async function loadPdfFont() {
     fontBase64 = btoa(binary);
   }
 }
-export async function makePDF(notebook, pages, allPages) {
+export function exportSettings(options = {}) {
+  const theme = options.theme ?? "light";
+  const figureWidthMm = Number(options.figureWidthMm ?? 180);
+  const figureHeightMm = Number(
+    options.figureHeightMm ?? (figureWidthMm === 88 ? 70 : 90),
+  );
+  if (!["light", "dark"].includes(theme))
+    throw new Error("Choose light or dark export appearance.");
+  if (![88, 180].includes(figureWidthMm))
+    throw new Error("Figure width must be 88 or 180 mm.");
+  const maxHeightMm = figureWidthMm === 88 ? 130 : 185;
+  if (
+    !Number.isFinite(figureHeightMm) ||
+    figureHeightMm < 40 ||
+    figureHeightMm > maxHeightMm
+  )
+    throw new Error(`Figure height must be between 40 and ${maxHeightMm} mm.`);
+  return {
+    theme,
+    figureWidthMm,
+    figureHeightMm,
+    rasterDpi: 300,
+    fontSizePt: 6,
+    labelSizePt: 7,
+    colorSpace: "RGB",
+    profile: "Nature original research — supplied final-artwork guide",
+    sourceGuide: "NRJs-guide-to-preparing-final-artwork.pdf",
+    maxHeightMm,
+    intendedUse:
+      theme === "light"
+        ? "Publication figure preset; review original artwork separately"
+        : "Dark presentation variant",
+  };
+}
+export async function makePDF(notebook, pages, allPages, options = {}) {
+  const settings = exportSettings(options);
   await loadPdfFont();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const font = fontBase64 ? "DejaVuSans" : "helvetica";
@@ -144,8 +180,37 @@ export async function makePDF(notebook, pages, allPages) {
     doc.setFont(font);
   }
   doc.setProperties({ title: notebook.title, author: notebook.author });
-  const ink = [41, 52, 52],
-    accent = [30, 103, 90];
+  const dark = settings.theme === "dark";
+  const ink = dark ? [238, 229, 214] : [32, 33, 36],
+    accent = dark ? [233, 181, 104] : [109, 76, 41],
+    background = dark ? [23, 25, 28] : [255, 255, 255],
+    tableBackground = dark ? [35, 37, 40] : [255, 255, 255],
+    tableAlternate = dark ? [43, 44, 46] : [246, 246, 244];
+  const painted = new Set();
+  const paintPage = () => {
+    const number = doc.getCurrentPageInfo().pageNumber;
+    if (painted.has(number)) return;
+    doc.setFillColor(...background);
+    doc.rect(0, 0, 210, 297, "F");
+    painted.add(number);
+  };
+  const newPage = () => {
+    doc.addPage();
+    paintPage();
+  };
+  const tableStyle = {
+    font,
+    fontSize: 8,
+    cellPadding: 2,
+    textColor: ink,
+    fillColor: tableBackground,
+    lineColor: dark ? [65, 65, 65] : [225, 225, 225],
+  };
+  const tableHead = {
+    fillColor: accent,
+    textColor: dark ? [23, 25, 28] : [255, 255, 255],
+  };
+  paintPage();
   const text = (value, size = 11, style = "normal") => {
     doc.setFont(font, style);
     doc.setFontSize(size);
@@ -153,7 +218,7 @@ export async function makePDF(notebook, pages, allPages) {
     const lines = doc.splitTextToSize(value || "", 166);
     for (const line of lines) {
       if (y > 266) {
-        doc.addPage();
+        newPage();
         y = 25;
       }
       doc.text(line, 22, y);
@@ -163,7 +228,8 @@ export async function makePDF(notebook, pages, allPages) {
   };
   let y = 25;
   for (let i = 0; i < pages.length; i++) {
-    if (i) doc.addPage();
+    if (i) newPage();
+    const firstSheet = doc.getNumberOfPages();
     y = 22;
     doc.setDrawColor(...accent);
     doc.line(22, 16, 188, 16);
@@ -184,8 +250,10 @@ export async function makePDF(notebook, pages, allPages) {
             p.entry.title,
             String(p.number),
           ]),
-        styles: { font, fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: accent },
+        styles: { ...tableStyle, fontSize: 9, cellPadding: 3 },
+        headStyles: tableHead,
+        alternateRowStyles: { fillColor: tableAlternate },
+        willDrawPage: paintPage,
       });
     } else {
       const e = p.entry;
@@ -200,8 +268,10 @@ export async function makePDF(notebook, pages, allPages) {
             margin: { left: 22, right: 22 },
             head: [b.attachment.table.headers],
             body: b.rows,
-            styles: { font, fontSize: 8, cellPadding: 2 },
-            headStyles: { fillColor: accent },
+            styles: tableStyle,
+            headStyles: tableHead,
+            alternateRowStyles: { fillColor: tableAlternate },
+            willDrawPage: paintPage,
           });
           y = doc.lastAutoTable.finalY + 8;
         } else if (b.attachment.kind === "image") {
@@ -211,7 +281,7 @@ export async function makePDF(notebook, pages, allPages) {
             h = Math.min(95, (w * props.height) / props.width);
           const width = (h * props.width) / props.height;
           if (y + h > 268) {
-            doc.addPage();
+            newPage();
             y = 24;
           }
           doc.addImage(a.data, props.fileType, 22, y, width, h);
@@ -224,19 +294,31 @@ export async function makePDF(notebook, pages, allPages) {
         text("Next: " + (e.next || "Not recorded."), 9);
       }
     }
-    doc.setFontSize(9);
-    doc.setTextColor(110);
-    doc.text(`Notebook page ${p.number} · ${p.id}`, 22, 286);
+    const lastSheet = doc.getNumberOfPages();
+    for (let sheet = firstSheet; sheet <= lastSheet; sheet++) {
+      doc.setPage(sheet);
+      doc.setFontSize(9);
+      doc.setTextColor(...(dark ? [183, 174, 158] : [110, 110, 110]));
+      doc.text(`Notebook page ${p.number} · ${p.id}`, 22, 286);
+    }
   }
   return new Uint8Array(doc.output("arraybuffer"));
 }
-export async function exportBundle(notebook, pages, allPages, formats) {
+export async function exportBundle(
+  notebook,
+  pages,
+  allPages,
+  formats,
+  options = {},
+) {
+  const settings = exportSettings(options);
   const files = {},
-    payload = selectedPayload(notebook, pages);
+    payload = { ...selectedPayload(notebook, pages), exportSettings: settings };
+  files["export-settings.json"] = strToU8(JSON.stringify(settings, null, 2));
   if (formats.includes("md"))
     files["handoff.md"] = strToU8(handoff(notebook, pages));
   if (formats.includes("pdf"))
-    files["notebook.pdf"] = await makePDF(notebook, pages, allPages);
+    files["notebook.pdf"] = await makePDF(notebook, pages, allPages, settings);
   if (formats.some((f) => ["python", "mat", "fig", "source"].includes(f))) {
     files["notebook.json"] = strToU8(JSON.stringify(payload, null, 2));
     files["pages.json"] = strToU8(JSON.stringify(pages, null, 2));
@@ -262,19 +344,26 @@ export async function exportBundle(notebook, pages, allPages, formats) {
     );
   }
   if (formats.includes("python")) {
-    files["requirements.txt"] = strToU8("matplotlib>=3.8\nnumpy>=1.26\n");
-    files["recreate_figures.py"] = strToU8(
-      `"""Recreate CSV plots; keep original sources. Run in the extracted folder."""\nfrom pathlib import Path\nimport base64, csv, io, json\nimport numpy as np\nimport matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt\nroot = Path(__file__).resolve().parent\nnotebook = json.loads((root / "notebook.json").read_text(encoding="utf-8"))\nout = root / "python_exports"\nout.mkdir(exist_ok=True)\nfor entry in notebook["entries"]:\n    for index, attachment in enumerate(entry["attachments"]):\n        if attachment["kind"] != "table":\n            continue\n        table = attachment["table"]\n        numeric = []\n        for column, name in enumerate(table["headers"]):\n            try:\n                values = [float(row[column]) if row[column].strip() else float("nan") for row in table["rows"]]\n                numeric.append((name, values))\n            except ValueError:\n                pass\n        if not numeric:\n            continue\n        values = np.array([column[1] for column in numeric]).T\n        stem = out / (entry["id"] + "_" + str(index))\n        np.savez_compressed(str(stem) + ".npz", values=values, columns=np.array([c[0] for c in numeric]))\n        fig, ax = plt.subplots(layout="constrained")\n        if len(numeric) > 1:\n            for name, column in numeric[1:]:\n                ax.plot(numeric[0][1], column, label=name)\n            ax.set_xlabel(numeric[0][0])\n        else:\n            ax.plot(numeric[0][1], label=numeric[0][0])\n            ax.set_xlabel("Row")\n        ax.legend()\n        ax.set_title(attachment["name"])\n        fig.savefig(str(stem) + ".svg")\n        fig.savefig(str(stem) + ".pdf")\n        fig.savefig(str(stem) + ".png", dpi=200)\n        plt.close(fig)\nprint("Exports saved to", out)\n`,
+    const font = await import("./figure-font.js");
+    files["fonts/LiberationSans-Regular.ttf"] = Uint8Array.from(
+      atob(font.default),
+      (c) => c.charCodeAt(0),
     );
+    files["fonts/LICENSE.txt"] = strToU8(font.license);
+    files["requirements.txt"] = strToU8("matplotlib>=3.8\nnumpy>=1.26\n");
+    files["recreate_figures.py"] = strToU8(pythonFigures);
   }
   if (formats.includes("fig")) {
-    files["create_matlab_figures.m"] = strToU8(
-      `% Run from this file's directory. Original FIG attachments are preserved.\nroot = fileparts(mfilename('fullpath'));\nnotebook = jsondecode(fileread(fullfile(root, 'notebook.json')));\nout = fullfile(root, 'matlab_exports'); if ~isfolder(out), mkdir(out); end\nentries = notebook.entries; if isstruct(entries), entries = num2cell(entries); end\nfor i = 1:numel(entries)\n    e = entries{i}; attachments = e.attachments;\n    if isstruct(attachments), attachments = num2cell(attachments); end\n    for j = 1:numel(attachments)\n        a = attachments{j}; if ~strcmp(a.kind, 'table'), continue; end\n        bytes = matlab.net.base64decode(extractAfter(string(a.data), ','));\n        source = fullfile(out, sprintf('source_%s_%d.csv', e.id, j));\n        fid = fopen(source, 'w'); fwrite(fid, bytes, 'uint8'); fclose(fid);\n        t = readtable(source, 'VariableNamingRule','preserve');\n        numeric = varfun(@isnumeric,t,'OutputFormat','uniform');\n        t = t(:,numeric); if width(t)==0, continue; end\n        f = figure('Visible','off','Color','w'); ax = axes(f); hold(ax,'on');\n        if width(t)>1\n            for k=2:width(t), plot(ax,t{:,1},t{:,k},'DisplayName',t.Properties.VariableNames{k}); end\n            xlabel(ax,t.Properties.VariableNames{1},'Interpreter','none');\n        else\n            plot(ax,t{:,1},'DisplayName',t.Properties.VariableNames{1}); xlabel(ax,'Row');\n        end\n        title(ax,a.name,'Interpreter','none'); legend(ax,'Interpreter','none');\n        stem = fullfile(out,sprintf('%s_%d',e.id,j));\n        savefig(f,[stem '.fig']); exportgraphics(ax,[stem '.pdf'],'ContentType','vector'); close(f);\n    end\nend\n`,
-    );
+    files["create_matlab_figures.m"] = strToU8(matlabFigures);
     files["READ_FIGURES.txt"] = strToU8(
-      "Original .fig attachments are included unchanged. Run create_matlab_figures.m in MATLAB to create genuine editable .fig files from numeric CSV tables. A rendered image cannot reconstruct the original plotted data or original graphics objects. No MATLAB code is executed by the website.",
+      "Original FIG attachments are included unchanged. Run create_matlab_figures.m in MATLAB when you choose to create editable figures from numeric CSV tables. The website never starts MATLAB or requests a license. Original images cannot recreate the underlying plotted data or graphics objects.",
     );
   }
+  if (formats.includes("python") || formats.includes("fig"))
+    files["FIGURE_FORMATTING.txt"] = strToU8(
+      `Generated figures: ${settings.figureWidthMm} × ${settings.figureHeightMm} mm, 6 pt ticks/legend, 7 pt labels/title, RGB, editable vector PDF, 300 dpi PNG. Theme: ${settings.theme}.\n` +
+        "Source: supplied NRJs-guide-to-preparing-final-artwork.pdf, original research profile: 88/180 mm widths, 5–7 pt sans-serif text, RGB and vector artwork. Conservative height caps: 130/185 mm. Prefer Arial/Helvetica; Python bundles Liberation Sans as a portable fallback. Dark is a presentation variant.\nOriginal attachments and scientific values are preserved. Existing raster artwork needs manual review for resolution, lettering, and permissions; converting it to PDF does not make it vector. No artificial upsampling is performed. Notebook pages remain A4 documents, separate from publication-sized standalone figures.\n",
+    );
   files["EXPORT_SCOPE.txt"] = strToU8(
     "PDF and handoff contain selected displayed pages. Source/data/figure packages contain complete parent entries, revision history, and original attachments for reproducibility, including content from unselected continuation pages. Review the full package before sharing. Raster images remain raster inside vector PDFs. Browser-local notebook data is not GitHub-synced.",
   );

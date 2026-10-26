@@ -74,6 +74,8 @@ def validate(n):
         raise ValueError('Unsupported notebook schema')
     for key, limit in [('title',200),('subtitle',500),('author',200)]:
         text(n.get(key,''),limit,key)
+    for key in ("brandName","brandSubtitle"):
+        if key in n:text(n[key],100,key)
     seen = set()
     for entry in n['entries']:
         validate_entry(entry)

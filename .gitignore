@@ -6,3 +6,6 @@ dist/
 private-data/
 __pycache__/
 *.pyc
+
+# Optional deployment identity; example is portable and tracked.
+public/notebook-config.json

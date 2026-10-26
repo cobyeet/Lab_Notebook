@@ -1,6 +1,6 @@
 # Lab Notebook
 
-A private-first, portable lab notebook for the daily work behind research. A website for reading; a contribution workspace for writing; a headless interface for agents. No account names, personal paths, fixed project list, or domain-specific configuration is required.
+A private-first, portable lab notebook for the daily work behind research. A dark, sand-and-amber website for reading; a contribution workspace for writing; a headless interface for agents. No account names, personal paths, fixed project list, or domain-specific configuration is required.
 
 ## Start a notebook shared with agents
 
@@ -50,6 +50,12 @@ python3 scripts/notebook.py --notebook private-data/notebook.json contribute --i
 
 JSON on stdin is supported with `--input -`. Stable IDs prevent duplicate retries. Revisions require `--replace` and preserve previous versions. The UI checks the local canonical file every 10 seconds when no dialog is open. Atomic writes, locks, and conditional HTTP writes protect against simultaneous edits. A runner invokes this interface; no scheduler or access to private chat history is installed automatically.
 
+## Branding and appearance
+
+The reader uses a charcoal, amber, and sand palette inspired by a lab identity. Lab names remain configuration: copy `public/notebook-config.example.json` to the ignored `public/notebook-config.json` and edit its two text fields for a deployment. Notebook settings can override them per notebook. No personal filesystem paths or lab accounts are required. The small hourglass motif is a code-drawn decorative mark, not an extracted copy of any supplied poster.
+
+The website stays dark. Every new Export dialog starts in **Light · publication default**, independently of the reader. **Dark · presentation** changes generated notebook PDFs and figure scripts. CSV/MAT/NPZ values and original attachments are theme-neutral and remain unchanged. The export package records appearance and physical figure dimensions in `export-settings.json`.
+
 ## Export matrix
 
 The Export dialog accepts page numbers and ranges such as `1, 3-5` and downloads a ZIP.
@@ -59,13 +65,23 @@ The Export dialog accepts page numbers and ranges such as `1, 3-5` and downloads
 | Vector PDF | Searchable text, vector tables, original raster images | Embedded DejaVu Sans for common scientific Unicode. Extremely large tables may span PDF sheets. Notebook page labels remain attached. |
 | Agent handoff | Selected page text/tables, entry IDs, provenance, next steps | Markdown; original attachment binaries are in source/data packages |
 | MATLAB data | Genuine MATLAB v4 `.mat` with numerical CSV columns and JSON encoded as UTF-8 bytes | Includes instructions to recover full entry metadata; original attached MAT files preserved |
-| MATLAB figures | Original FIG files unchanged, plus a `.m` reconstruction script | Run in MATLAB to generate genuine editable `.fig` and vector PDF plots from numeric CSV. Rendered images cannot recreate original graphics objects. |
-| Python figures/data | Original CSV and metadata plus `recreate_figures.py` / `requirements.txt` | Run the script with NumPy and Matplotlib to create SVG/PDF/PNG and NPZ. The website does not run Python. |
+| MATLAB figures | Original FIG files unchanged, plus a `.m` reconstruction script | Run in MATLAB when you choose to generate genuine editable `.fig`, vector PDF, and 300 dpi PNG plots from numeric CSV. The website never starts MATLAB or requests a license. Rendered images cannot recreate original graphics objects. |
+| Python figures/data | Original CSV and metadata plus `recreate_figures.py` / `requirements.txt` | Run the script with NumPy and Matplotlib to create SVG/PDF/PNG and NPZ. Outputs are grouped under `python_exports_light/` or `python_exports_dark/`. The website does not run Python. |
 | Source archive | Complete parent entries, displayed-page mapping, and original attachments | Includes SHA-256 attachment provenance |
 
 PDF and handoff exports use the selected displayed pages. Source/data/figure exports include the **whole parent entry**, including revision history and unselected continuation pages, to preserve context and source data. The dialog states this explicitly. Review packages before sharing.
 
 Page grouping is deterministic and independent of viewport size; on narrow screens dense pages scroll inside their paper. Page numbers are a view, not immutable scientific identifiers. The first numeric CSV column is used as the plotting x-axis when more than one numeric column exists; a single numeric column is plotted against row index. Generated plots are conveniences and are not substitutes for original analysis figures.
+
+### Publication figure preset
+
+The supplied **NRJs-guide-to-preparing-final-artwork.pdf** defines the original-research profile used here: **88 mm single-column or 180 mm double-column width**, **5–7 pt sans-serif text**, RGB artwork, editable vector line art, and raster images at least 300 dpi at final size. The dialog offers these widths plus a figure height. Conservative maximum heights are 130 mm for single-column and 185 mm for double-column figures, matching the guide's longest-caption category. Other caption categories allow taller figures; this first preset stays within the conservative bounds.
+
+Generated CSV plots use 6 pt ticks/legends, 7 pt axis labels/title, 0.6 pt axes, 0.8 pt traces, and a colorblind-friendly light palette. Python prefers installed Arial/Helvetica, bundles an open-source Liberation Sans fallback, embeds TrueType fonts in PDF, and preserves SVG text. MATLAB prefers installed Arial/Helvetica and records its selected font; its reconstruction script requires a separately available MATLAB session and is never executed by the website. The chosen line widths are implementation defaults, not quoted requirements from the supplied guide.
+
+Vector output preserves physical page dimensions rather than cropping with tight bounding boxes. PNGs are rendered at 300 dpi from the generated vector plot. Each runtime writes a figure manifest with dimensions, theme, and font. These generated figure presets are separate from the readable A4 notebook PDF. Dark output is a presentation alternative.
+
+Original files stay in the source package without recoloring, resampling, or automatic claims of journal compliance. Existing raster artwork, arbitrary attached FIGs, and figures with long labels still need source-level review. The software cannot recover editable data from a flattened image or guarantee every journal production requirement automatically. The poster and artwork guide themselves are not redistributed in the reusable repository.
 
 ## Static hosting and a future personal website
 
@@ -98,4 +114,4 @@ The tests cover page ordering, stable links, exact selected text, CSV parsing, s
 
 ## License
 
-Application code: MIT. Bundled DejaVu font retains its separate license in `public/fonts/LICENSE.txt`. Other dependencies retain their upstream licenses.
+Application code: MIT. Bundled DejaVu and Liberation fonts retain their separate licenses in `public/fonts/LICENSE.txt` and `public/fonts/LICENSE-LIBERATION.txt`. Other dependencies retain their upstream licenses.
