@@ -63,7 +63,7 @@ The Export dialog accepts page numbers and ranges such as `1, 3-5` and downloads
 | Python figures/data | Original CSV and metadata plus `recreate_figures.py` / `requirements.txt` | Run the script with NumPy and Matplotlib to create SVG/PDF/PNG and NPZ. The website does not run Python. |
 | Source archive | Complete parent entries, displayed-page mapping, and original attachments | Includes SHA-256 attachment provenance |
 
-PDF and handoff exports use the selected displayed pages. Source/data/figure exports include the **whole parent entry**, including unselected continuation pages, to preserve context and source data. The dialog states this explicitly. Review packages before sharing.
+PDF and handoff exports use the selected displayed pages. Source/data/figure exports include the **whole parent entry**, including revision history and unselected continuation pages, to preserve context and source data. The dialog states this explicitly. Review packages before sharing.
 
 Page grouping is deterministic and independent of viewport size; on narrow screens dense pages scroll inside their paper. Page numbers are a view, not immutable scientific identifiers. The first numeric CSV column is used as the plotting x-axis when more than one numeric column exists; a single numeric column is plotted against row index. Generated plots are conveniences and are not substitutes for original analysis figures.
 

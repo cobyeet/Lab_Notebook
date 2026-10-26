@@ -276,7 +276,7 @@ export async function exportBundle(notebook, pages, allPages, formats) {
     );
   }
   files["EXPORT_SCOPE.txt"] = strToU8(
-    "PDF and handoff contain selected displayed pages. Source/data/figure packages contain complete parent entries and original attachments for reproducibility, including content from unselected continuation pages. Review the full package before sharing. Raster images remain raster inside vector PDFs. Browser-local notebook data is not GitHub-synced.",
+    "PDF and handoff contain selected displayed pages. Source/data/figure packages contain complete parent entries, revision history, and original attachments for reproducibility, including content from unselected continuation pages. Review the full package before sharing. Raster images remain raster inside vector PDFs. Browser-local notebook data is not GitHub-synced.",
   );
   return zipSync(files, { level: 6 });
 }

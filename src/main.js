@@ -364,7 +364,7 @@ function draftValue() {
   };
 }
 function openEditor(id) {
-  mode = "contribute";
+  if (mode !== "contribute") { mode = "contribute"; render(); }
   const source = id ? notebook.entries.find((e) => e.id === id) : null;
   if (source) {
     if (notebook.draft && notebook.draft.id !== id) {
@@ -599,7 +599,7 @@ function openExport() {
     )
     .join(
       "",
-    )}</div><p class="export-note">PDF and handoff follow the selected pages. Data and figure packages include complete parent entries and their attachments. Review the full package before sharing.</p><div class="dialog-footer"><span id="export-state">Download as one ZIP file</span><button class="button primary" type="submit">↓ Export selected pages</button></div></form>`;
+    )}</div><p class="export-note">PDF and handoff follow the selected pages. Data and figure packages include complete parent entries, attachments, and revision history. Review the full package before sharing.</p><div class="dialog-footer"><span id="export-state">Download as one ZIP file</span><button class="button primary" type="submit">↓ Export selected pages</button></div></form>`;
   dialog.querySelector("[data-close]").onclick = () => dialog.close();
   $("#all-pages").onclick = () =>
     ($("#export-form").elements.pages.value = `1-${pages.length}`);

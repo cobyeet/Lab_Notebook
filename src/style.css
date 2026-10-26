@@ -1214,3 +1214,4 @@ body {
     font-size: 9px;
   }
 }
+@media(max-width:700px){.toc-head,.toc-row{grid-template-columns:50px 48px minmax(0,1fr) 24px;gap:5px}.toc-title{overflow-wrap:normal;word-break:normal}}
