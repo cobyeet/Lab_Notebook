@@ -1348,3 +1348,6 @@ main {
 .reader-approve { margin: 20px 0; }
 #cloud-state.error { color: #edaa9b; }
 @media (max-width: 700px) { .access-gate { padding: 22px; } .approved-readers > div { align-items: flex-start; } }
+
+.entry-body a, .entry-notes a { color: #e5bc7c; text-decoration: underline; text-decoration-color: #a77a42; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.entry-body a:hover, .entry-notes a:hover { color: #ffe1b0; }

@@ -16,6 +16,30 @@ export const escapeHTML = (value) =>
         c
       ],
   );
+// Only labeled web links are interpreted; all other entry text remains literal.
+export function inlineLinks(value) {
+  const text = String(value ?? ""), parts = [];
+  const pattern = /\[([^\]\n]+)\]\((https?:\/\/(?:[^\s<>()]|\([^\s<>()]*\))+)\)/gi;
+  let start = 0;
+  for (const match of text.matchAll(pattern)) {
+    let url;
+    try {
+      const parsed = new URL(match[2]);
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) continue;
+      url = parsed.href;
+    } catch { continue; }
+    if (match.index > start) parts.push({text:text.slice(start,match.index),raw:text.slice(start,match.index)});
+    parts.push({text:match[1],url,raw:match[0]});
+    start = match.index + match[0].length;
+  }
+  if (start < text.length) parts.push({text:text.slice(start),raw:text.slice(start)});
+  return parts;
+}
+export function renderTextLinks(value) {
+  return inlineLinks(value).map(p => p.url
+    ? `<a href="${escapeHTML(p.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(p.text)}</a>`
+    : escapeHTML(p.text)).join("").replaceAll("\n","<br>");
+}
 export function parseCSV(text) {
   const result = Papa.parse(text.replace(/^\uFEFF/, ""), {
     skipEmptyLines: "greedy",
@@ -66,8 +90,22 @@ export function paginate(entries) {
     const text = entry.body || "";
     const blocks = [];
     for (const paragraph of text.split(/\n\s*\n/)) {
-      for (let i = 0; i < paragraph.length; i += 1100)
-        blocks.push({ kind: "text", text: paragraph.slice(i, i + 1100) });
+      let chunk = "", length = 0;
+      for (const part of inlineLinks(paragraph)) {
+        if (part.url) {
+          if (length && length + part.text.length > 1100) {
+            blocks.push({kind:"text",text:chunk}); chunk = ""; length = 0;
+          }
+          chunk += part.raw; length += part.text.length;
+        } else {
+          for (let i = 0; i < part.text.length;) {
+            if (length >= 1100) {blocks.push({kind:"text",text:chunk}); chunk = ""; length = 0;}
+            const segment = part.text.slice(i,i + 1100 - length);
+            chunk += segment; length += segment.length; i += segment.length;
+          }
+        }
+      }
+      if (chunk) blocks.push({kind:"text",text:chunk});
     }
     for (const attachment of entry.attachments) {
       if (attachment.kind === "table") {
@@ -97,7 +135,7 @@ export function paginate(entries) {
     };
     addPage();
     for (const block of blocks) {
-      const w = block.kind === "text" ? block.text.length : 700;
+      const w = block.kind === "text" ? inlineLinks(block.text).reduce((n,p)=>n+p.text.length,0) : 700;
       if (weight + w > 1850 && page.blocks.length) addPage();
       page.blocks.push(block);
       weight += w;

@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { zipSync, strToU8 } from "fflate";
-import { numericTable, paginate } from "./model.js";
+import { numericTable, paginate, inlineLinks } from "./model.js";
 import { pythonFigures, matlabFigures } from "./figure-templates.js";
 export function saveFile(name, data, type = "application/octet-stream") {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -211,10 +211,37 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
     textColor: dark ? [23, 25, 28] : [255, 255, 255],
   };
   paintPage();
-  const text = (value, size = 11, style = "normal") => {
+  const text = (value, size = 11, style = "normal", links = false) => {
     doc.setFont(font, style);
     doc.setFontSize(size);
     doc.setTextColor(...ink);
+    const parts = links ? inlineLinks(value) : [];
+    if (parts.some(p => p.url)) {
+      let x = 22;
+      const lineHeight = size * 0.43;
+      const nextLine = () => {x = 22; y += lineHeight;};
+      for (const part of parts) {
+        for (const word of part.text.match(/\n|[^\S\n]+|[^\s]+/g) || []) {
+          if (word === "\n") {nextLine(); continue;}
+          if (!word.trim()) {if (x > 22) x += doc.getTextWidth(word); continue;}
+          const pieces = doc.getTextWidth(word) > 166 ? doc.splitTextToSize(word,166) : [word];
+          for (const piece of pieces) {
+            const width = doc.getTextWidth(piece);
+            if (x > 22 && x + width > 188) nextLine();
+            if (y > 266) {newPage(); y = 25;}
+            doc.setTextColor(...(part.url ? accent : ink));
+            doc.text(piece,x,y);
+            if (part.url) {
+              doc.link(x,y-size*0.31,width,lineHeight,{url:part.url});
+              doc.setDrawColor(...accent); doc.setLineWidth(0.15); doc.line(x,y+0.6,x+width,y+0.6);
+            }
+            x += width;
+          }
+        }
+      }
+      y += lineHeight + 3;
+      return;
+    }
     const lines = doc.splitTextToSize(value || "", 166);
     for (const line of lines) {
       if (y > 266) {
@@ -260,7 +287,7 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
       text(`${e.date.replaceAll("-", "")}  /  ${e.project}  /  ${e.status}`, 9);
       text(e.title + (p.continuation ? " (continued)" : ""), 24, "bold");
       for (const b of p.blocks) {
-        if (b.kind === "text") text(b.text);
+        if (b.kind === "text") text(b.text,11,"normal",true);
         else if (b.kind === "table") {
           text(b.attachment.name, 10, "bold");
           autoTable(doc, {
@@ -290,8 +317,8 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
         } else text(`Source attachment: ${b.attachment.name}`, 10);
       }
       if (!p.continuation) {
-        text("Sources: " + (e.sources || "Not recorded."), 9);
-        text("Next: " + (e.next || "Not recorded."), 9);
+        text("Sources: " + (e.sources || "Not recorded."),9,"normal",true);
+        text("Next: " + (e.next || "Not recorded."),9,"normal",true);
       }
     }
     const lastSheet = doc.getNumberOfPages();

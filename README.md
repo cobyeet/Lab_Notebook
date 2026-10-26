@@ -27,6 +27,7 @@ The example path above is user configuration, never an application assumption. T
 - **Contribute:** Add or edit dated entries, retain drafts, record evidence status, provenance, and next steps. Projects are free text. Settings customize the notebook identity.
 - **Attachments:** Drop CSVs for paginated tables and images for previews. FIG, MAT, PDF, SVG, and NPZ are preserved as downloadable originals. SVG is deliberately retained as a file, not executed as page markup. Up to 20 MB per file, 100 attachments per entry. CSV previews support 20,000 rows / 100 columns.
 - **Stable references:** Permanent links use entry IDs; changing page numbers do not break references. Links resolve within a notebook that actually contains the entry.
+- **Clickable references:** Notes, sources, and next steps support `[descriptive text](https://...)` links to code, figures, data, and protocols. Labels stay concise in the reader and clickable in PDF exports; Markdown handoffs preserve the original destinations. Use verified GitHub commit/file links and configured Webdisk URLs. Existing reader access is assumed. Raw HTML, local filesystem links, and executable URL schemes are not interpreted.
 - **Backups:** Download or restore a self-contained JSON backup including original attachments. Restore replaces the current notebook after a review dialog. Back up first.
 
 On small screens, the menu at the upper left contains settings and backup tools. Very long page content scrolls vertically within its paper; page turning remains horizontal.

@@ -8,6 +8,8 @@ import {
   parseSelection,
   numericTable,
   validateNotebook,
+  inlineLinks,
+  renderTextLinks,
 } from "../src/model.js";
 import {
   handoff,
@@ -16,6 +18,41 @@ import {
   exportSettings,
 } from "../src/exports.js";
 import { unzipSync, strFromU8 } from "fflate";
+
+test("descriptive web links render safely without interpreting entry HTML", () => {
+  const text = '[detector](https://github.com/lab/repo/blob/abc/detect.m#L10-L20)[figure](https://disk.example.org/Figure(1).pdf?x=1&y=2)';
+  const links = inlineLinks(text).filter(p=>p.url);
+  assert.equal(links.length,2);
+  assert.equal(links[0].text,'detector');
+  assert.equal(links[1].url,'https://disk.example.org/Figure(1).pdf?x=1&y=2');
+  const rendered=renderTextLinks(text+'\n<script>alert(1)</script>');
+  assert.ok(rendered.includes('rel="noopener noreferrer"'));
+  assert.ok(rendered.includes('x=1&amp;y=2'));
+  assert.ok(rendered.includes('<br>&lt;script&gt;'));
+  for (const unsafe of ['[bad](javascript:alert(1))','[bad](data:text/html,test)','[local](file:///Volumes/data.pdf)','[secret](https://user:password@example.org/file)'])
+    assert.ok(!renderTextLinks(unsafe).includes('<a '));
+  assert.ok(!renderTextLinks('[<img onerror=bad>](https://example.org/)').includes('<img'));
+});
+test("pagination preserves whole links and counts their labels rather than hidden URLs", () => {
+  const e=exampleNotebook().entries[0];
+  const link=`[source figure](https://disk.example.org/${'x'.repeat(1400)}/figure.pdf)`;
+  e.body='x'.repeat(1090)+link+'y'.repeat(30);
+  const blocks=paginate([e]).flatMap(p=>p.blocks||[]).filter(b=>b.kind==='text');
+  assert.equal(blocks.map(b=>b.text).join(''),e.body);
+  assert.equal(blocks.filter(b=>b.text.includes(link)).length,1);
+  e.body=`Question. ${link} Result.`;
+  assert.equal(paginate([e]).length,2);
+});
+test("PDF reference labels have clickable annotations and Markdown exports retain destinations", async () => {
+  const n=exampleNotebook();
+  n.entries[0].body='Checked [wave detection](https://github.com/lab/repo/blob/abc/detect.m#L10) to test timing reproducibility.';
+  n.entries[0].sources='[Source figure](https://disk.example.org/figure.pdf)';
+  n.entries[0].next='Compare [reference data](https://disk.example.org/data.csv).';
+  const p=paginate(n.entries),z=unzipSync(await exportBundle(n,[p[1]],p,['pdf','md']));
+  const pdf=strFromU8(z['notebook.pdf']);
+  for (const url of ['https://github.com/lab/repo/blob/abc/detect.m#L10','https://disk.example.org/figure.pdf','https://disk.example.org/data.csv']) assert.ok(pdf.includes(`/URI (${url})`));
+  assert.ok(strFromU8(z['handoff.md']).includes(n.entries[0].body));
+});
 
 test("contents first, newest entries first, stable links survive insertion", () => {
   const n = exampleNotebook(),

@@ -1,11 +1,13 @@
 ---
 name: lab-notebook-daily
-description: Contribute a daily lab notebook entry from available chat context, repository evidence, and user-supplied offline work when asked to update a lab notebook. Supports the portable Lab Notebook CLI and backup-import workflow.
+description: Contribute concise daily lab notebook entries explaining scientific rationale and progress toward established goals, using available chat context, repository evidence, and supplied offline work. Supports the portable Lab Notebook CLI and backup-import workflow.
 ---
 
 Create a faithful daily record in this repository's notebook. Read [the agent interface](../../../AGENTS.md) for commands and schema. Resolve the repository and notebook file from the current workspace, configuration, or the user; never assume a person's home directory, account name, or machine layout.
 
 Collect the day's relevant conversation context, available explicitly authorized chat summaries, repository changes, tests, figures, and offline work supplied by the user. Use the user's local date; ask if a cross-midnight session makes the intended notebook date unclear. You cannot retrieve an entire ChatGPT history unless an available integration provides it. Say which sources were unavailable. Do not claim comprehensive coverage from a single chat.
+
+Follow the **Entry writing standard** in AGENTS.md: aim for 50–100 words per entry, usually 3–4 short bullets. Explain why the work matters, pair consequential steps with their scientific rationale, and connect the evidence to an established long-term goal or clarified blocker. Write plain neuroscience and signal-processing language for a reader new to the project; explain unfamiliar terms and omit AI jargon. Use short descriptive links to verified GitHub functions/files and SandLab Webdisk figures, data, or protocols, assuming reader access to both. Keep the result, principal limitation, and next step explicit without repeating them across fields. Expand only for essential evidence or reproducibility; move supporting detail to attachments or `sources`. Use documented goals and reasoning; ask about material gaps or identify them briefly rather than inventing a justification. This applies equally to initial entries and revisions.
 
 Keep completed work, observations, interpretation, validation limits, and next steps distinguishable in the entry body. Record repository URLs/commit IDs, artifact identifiers, and test evidence in `sources`. A code change or synthetic test alone is not a verified scientific finding. Do not invent outcomes, infer physiological results from a figure title, or mark verification from an incomplete test. Prefer `unverified`, `observation`, or `in-progress` when evidence is limited. Mark `significant` only for actual milestones such as new repositories, architectural changes, or substantiated major findings.
 

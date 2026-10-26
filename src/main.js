@@ -7,6 +7,7 @@ import {
   parseSelection,
   validateNotebook,
   escapeHTML as h,
+  renderTextLinks,
 } from "./model.js";
 import { readNotebook, writeNotebook } from "./storage.js";
 import { saveFile, exportBundle } from "./exports.js";
@@ -199,7 +200,7 @@ function renderPage(p) {
   return `<article class="paper entry-paper" data-page="${p.number}" id="page-${p.number}"><div class="paper-topline"><span>${h(e.project)}</span><span>${e.date.replaceAll("-", "")}</span></div><div class="entry-meta"><span class="status ${h(e.status)}">${h(statusLabel(e.status))}</span>${e.significant ? '<span class="milestone">✦ MILESTONE</span>' : ""}${p.continuation ? "<span>CONTINUED</span>" : ""}</div><h2>${h(e.title)}</h2><div class="entry-body">${p.blocks
     .map((b) => {
       if (b.kind === "text")
-        return `<p>${h(b.text).replaceAll("\n", "<br>")}</p>`;
+        return `<p>${renderTextLinks(b.text)}</p>`;
       const a = b.attachment;
       if (b.kind === "table")
         return `<figure class="data-figure"><figcaption>${h(a.name)} <span>ROWS ${b.offset + 1}–${b.offset + b.rows.length}</span></figcaption><div class="table-scroll"><table><thead><tr>${a.table.headers.map((c) => `<th>${h(c)}</th>`).join("")}</tr></thead><tbody>${b.rows.map((r) => `<tr>${r.map((c) => `<td>${h(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></figure>`;
@@ -209,7 +210,7 @@ function renderPage(p) {
     })
     .join(
       "",
-    )}</div>${!p.continuation && (e.sources || e.next) ? `<div class="entry-notes">${e.sources ? `<div><b>SOURCES & PROVENANCE</b><p>${h(e.sources).replaceAll("\n", "<br>")}</p></div>` : ""}${e.next ? `<div><b>NEXT STEPS</b><p>${h(e.next).replaceAll("\n", "<br>")}</p></div>` : ""}</div>` : ""}<div class="entry-tools"><button class="text-button" data-link="${h(p.id)}">Copy permanent link ↗</button>${!readOnly && mode === "contribute" ? `<button class="text-button" data-edit="${h(e.id)}">Edit entry ✎</button>` : ""}</div><div class="paper-footer"><span>${h(e.project)} / ${e.date}</span><span>${String(p.number).padStart(2, "0")}</span></div></article>`;
+    )}</div>${!p.continuation && (e.sources || e.next) ? `<div class="entry-notes">${e.sources ? `<div><b>SOURCES & PROVENANCE</b><p>${renderTextLinks(e.sources)}</p></div>` : ""}${e.next ? `<div><b>NEXT STEPS</b><p>${renderTextLinks(e.next)}</p></div>` : ""}</div>` : ""}<div class="entry-tools"><button class="text-button" data-link="${h(p.id)}">Copy permanent link ↗</button>${!readOnly && mode === "contribute" ? `<button class="text-button" data-edit="${h(e.id)}">Edit entry ✎</button>` : ""}</div><div class="paper-footer"><span>${h(e.project)} / ${e.date}</span><span>${String(p.number).padStart(2, "0")}</span></div></article>`;
 }
 function go(n, smooth = true) {
   const target = visible.find((p) => p.number === n);
