@@ -1,0 +1,25 @@
+{
+  "name": "open-lab-notebook",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A private-first, portable digital lab notebook",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=./",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "jspdf": "^4.0.0",
+    "jspdf-autotable": "^5.0.2",
+    "papaparse": "^5.5.3"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

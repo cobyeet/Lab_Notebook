@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Lab Notebook"
+  short_description: "Record daily research with evidence and next steps"
+  default_prompt: "Use $lab-notebook-daily to record today's work from this conversation, available repository evidence, and the offline work I provide."
