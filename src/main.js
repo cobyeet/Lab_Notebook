@@ -12,11 +12,12 @@ import {
 import { readNotebook, writeNotebook } from "./storage.js";
 import { saveFile, exportBundle } from "./exports.js";
 import { cloudSharing } from "./cloud-ui.js";
+import { automaticBackups } from './backup-ui.js';
 import { createExplorer, researchEditorMarkup, bindResearchEditor } from './explore.js';
 const readId = new URL(location.href).searchParams.get("read");
 const readOnly = new URL(location.href).searchParams.has("read");
 const readToken = new URLSearchParams(location.hash.slice(1)).get('key');
-let sharing, cloudConfig, sharedRevision;
+let sharing, backups, cloudConfig, sharedRevision;
 function pageHash(id) {return readOnly ? '#key='+encodeURIComponent(readToken||'')+'&entry='+encodeURIComponent(id) : id==='contents'?'#contents':'#entry='+encodeURIComponent(id);}
 function writable() {if (readOnly) throw new Error("This shared edition is read-only.");}
 let branding = { brandName: "FIELDNOTES", brandSubtitle: "A LAB NOTEBOOK" };
@@ -86,6 +87,9 @@ async function load() {
     server = true;
   }
   notebook ??= (await readNotebook()) ?? blankNotebook();
+  backups = await automaticBackups({config:cloudConfig, getNotebook:()=>notebook, onRestore:(candidate, beforeSave)=>restore(null,candidate,beforeSave)});
+  const recovered = await backups.initialize(notebook, !server);
+  if (recovered) {await writeNotebook(recovered); notebook = recovered;}
   render();
   navigateHash();
   if (server) setInterval(refresh, 10000);
@@ -131,6 +135,7 @@ async function persist() {
           );
         etag = r.headers.get("etag");
       } else await writeNotebook(snapshot);
+      backups?.changed(snapshot);
     });
   return saveChain;
 }
@@ -142,6 +147,7 @@ async function refresh() {
     if (r.ok && r.headers.get("etag") !== etag) {
       notebook = validateNotebook(await r.json(), true);
       etag = r.headers.get("etag");
+      backups?.changed(notebook);
       render();
       toast("Notebook updated by an agent or another session.");
     }
@@ -182,6 +188,18 @@ function render() {
   $("#app").innerHTML =
     `<div class="app-shell"><aside class="sidebar"><a class="brand" href="${h(pageHash('contents'))}" aria-label="Go to contents"><span class="brand-icon"><svg viewBox="0 0 28 34" aria-hidden="true"><path d="M3 2h22M3 32h22M6 3c0 8 16 10 16 14S6 23 6 31M22 3c0 8-16 10-16 14s16 6 16 14M9 7h10M11 27h6"/></svg></span><span class="brand-wordmark">${h(notebook.brandName ?? branding.brandName)}<small>${h(notebook.brandSubtitle ?? branding.brandSubtitle)}</small></span></a><div class="workspace-label">${readOnly ? "SHARED NOTEBOOK" : "YOUR WORKSPACE"}</div><button class="side-link selected" id="contents-link"><span>▤</span> Notebook <span class="count">${notebook.entries.length}</span></button>${readOnly ? "" : '<button class="side-link" id="new-side"><span>＋</span> New entry</button>'}<div class="project-heading">PROJECTS<button id="clear-filter" title="Show all projects">All</button></div><div class="projects">${projects.length ? projects.map((p, i) => `<button class="project ${filter === p ? "active" : ""}" data-project="${h(p)}"><i style="--dot:${["#648d78", "#b49a6a", "#788aab", "#ac7e72"][i % 4]}"></i>${h(p)}<span>${notebook.entries.filter((e) => e.project === p).length}</span></button>`).join("") : '<p class="side-muted">Projects appear as you write.</p>'}</div><div class="sidebar-bottom"><div class="storage-card"><span class="privacy-dot"></span><b>${readOnly ? "Read-only edition" : "Private by default"}</b><p>${readOnly ? "Only entries selected by the owner appear here. This private link can be revoked by the owner." : server ? "Saved to your local notebook service. Agents can contribute." : "Saved in this browser. Download a backup to keep a portable copy."}</p><span class="storage-label">${readOnly ? "PRIVATE READER" : server ? "LOCAL SERVICE CONNECTED" : "BROWSER STORAGE"}</span></div>${readOnly ? '' : `<button class="side-link" id="backup"><span>↓</span> Back up notebook</button><button class="side-link" id="restore"><span>↑</span> Restore backup</button><button class="side-link" id="settings"><span>⚙</span> Notebook settings</button><button class="side-link" id="share"><span>↗</span> Reader links</button>`}</div></aside><main><header class="topbar"><button id="mobile-menu" aria-label="Open notebook menu">☰</button><div class="breadcrumbs">Workspace <span>/</span> <b>Notebook</b></div><div class="top-actions">${readOnly ? '<span class="reader-badge">Read only</span>' : `<div class="mode-switch" aria-label="Notebook mode"><button id="read-mode" class="${mode === "read" ? "active" : ""}">Read</button><button id="contribute-mode" class="${!readOnly && mode === "contribute" ? "active" : ""}">Contribute</button></div>`}<button class="button subtle" id="export">${icons.download} Export</button></div></header><section class="notebook-heading"><div><div class="eyebrow">THE RESEARCH, AS IT HAPPENS</div><h1>${h(notebook.title)}</h1><p>${h(notebook.subtitle)}</p></div>${readOnly ? "" : '<button class="button primary" id="new-entry">＋ New entry</button>'}</section><div class="book-toolbar"><div class="book-label"><span class="green-dot"></span>${filter ? h(filter) : "All projects"}<span class="divider"></span><span>${query ? `${visible.length - 1} matching pages` : `${notebook.entries.length} ${notebook.entries.length === 1 ? "entry" : "entries"} · ${pages.length} ${pages.length === 1 ? "page" : "pages"}`}</span></div><label class="search">${icons.search}<input id="search" placeholder="Find in notebook…" value="${h(query)}" aria-label="Search notebook"></label></div><div class="reading-room"><div class="book-track" id="book" tabindex="0" aria-label="Notebook pages. Scroll left for older entries.">${workspaceMode==='book'?visible.map(renderPage).join(""):''}</div></div><footer class="reader-footer"><span class="scroll-hint">← Scroll left to turn the page <span>·</span> Newest entries first</span><div class="page-navigation"><button id="older" aria-label="Older page">←</button><label>Page <input id="page-number" type="number" min="1" max="${pages.length}" value="${current}" aria-label="Go to page"> of <span>${pages.length}</span></label><button id="newer" aria-label="Newer page">→</button></div><button class="text-button" id="to-contents">Back to contents ↗</button></footer></main></div><div id="toast" role="status"></div><dialog id="editor"></dialog><dialog id="export-dialog"></dialog><dialog id="settings-dialog"></dialog><dialog id="restore-dialog"></dialog><input type="file" id="restore-input" accept=".json,application/json" hidden>`;
   bind();
+  if (!readOnly) {
+    $('.storage-card p').id = 'backup-state';
+    $('.storage-card p').textContent = backups.status;
+    const backupButton = document.createElement('button');
+    backupButton.className = 'side-link'; backupButton.innerHTML = '<span>◈</span> Automatic backup';
+    backupButton.onclick = () => backups.open().catch(e=>toast(e.message,true));
+    $('#backup').before(backupButton);
+    const recoverButton = document.createElement('button');
+    recoverButton.className = 'text-button'; recoverButton.textContent = 'Recover private backup ↗';
+    recoverButton.onclick = backupButton.onclick;
+    document.querySelector('[data-restore]')?.after(recoverButton);
+  }
   const notebookButton = $('#contents-link');
   notebookButton.classList.toggle('selected',workspaceMode==='book');
   const exploreButton=document.createElement('button');exploreButton.className='side-link'+(workspaceMode==='explore'?' selected':'');exploreButton.id='explore-link';exploreButton.innerHTML='<span>◎</span> Explore';exploreButton.onclick=()=>{workspaceMode='explore';render();};notebookButton.after(exploreButton);
@@ -779,13 +797,13 @@ function settings() {
   };
   dialog.showModal();
 }
-async function restore(e) {
+async function restore(e, candidate, beforeSave) {
   writable();
   try {
-    const f = e.target.files[0];
-    if (!f) return;
-    if (f.size > 200 * 1024 * 1024) throw new Error("Backup exceeds 200 MB.");
-    restoreCandidate = validateNotebook(JSON.parse(await f.text()));
+    const f = e?.target.files[0];
+    if (!candidate && !f) return;
+    if (f?.size > 200 * 1024 * 1024) throw new Error("Backup exceeds 200 MB.");
+    restoreCandidate = validateNotebook(candidate || JSON.parse(await f.text()), true);
     const dialog = $("#restore-dialog");
     dialog.innerHTML = `<div class="dialog-header"><h2>Restore this notebook?</h2><button class="close" data-close aria-label="Close restore">×</button></div><p><b>${h(restoreCandidate.title)}</b><br>${restoreCandidate.entries.length} entries. This replaces the current notebook on this storage location.</p><p>Download a backup of your current notebook first.</p><div class="dialog-footer"><button class="button subtle" id="backup-first">Back up current notebook</button><button class="button primary" id="confirm-restore">Restore notebook</button></div>`;
     dialog.querySelector("[data-close]").onclick = () => dialog.close();
@@ -794,6 +812,7 @@ async function restore(e) {
       const before = notebook;
       notebook = restoreCandidate;
       try {
+        await beforeSave?.();
         await persist();
         dialog.close();
         filter = "";
@@ -811,7 +830,7 @@ async function restore(e) {
   } catch (err) {
     toast(err.message, true);
   }
-  e.target.value = "";
+  if (e) e.target.value = "";
 }
 document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'&&notebook&&!document.querySelector('dialog[open]')){e.preventDefault();explorer.quickFind();}

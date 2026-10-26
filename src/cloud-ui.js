@@ -37,7 +37,7 @@ export async function cloudSharing({config, readId, readToken, getNotebook}) {
     const body=document.querySelector('#cloud-body');
     if(!client){body.innerHTML='<p>Connect your own Supabase project to enable private reader links. Your working notebook remains local.</p>';return;}
     if(!owner){
-      body.innerHTML=`<p>Share selected entries through private, read-only links. Readers need no account. Anyone with a link can read its shared edition; you can revoke each link here.</p><p>Your working notebook stays local. Only the entries you choose are uploaded.</p><button class="button primary" id="cloud-create">Set up reader links</button><hr><label>Already set up on another browser?<input id="cloud-import" type="file" accept=".json,application/json"></label><p class="sharing-note">Restore your private owner key to manage an existing shared edition.</p>`;
+      body.innerHTML=`<p>Share selected entries through private, read-only links. Readers need no account. Anyone with a link can read its shared edition; you can revoke each link here.</p><p>Only the entries you choose become readable to readers. Encrypted automatic backups are separate.</p><button class="button primary" id="cloud-create">Set up reader links</button><hr><label>Already set up on another browser?<input id="cloud-import" type="file" accept=".json,application/json"></label><p class="sharing-note">Restore your private owner key to manage an existing shared edition.</p>`;
       document.querySelector('#cloud-create').onclick=run(async()=>{
         const key=token();const id=await rpc('ln_link_create',{p_owner_token:key,p_title:getNotebook().title});
         owner={version:1,url:config.url,id,token:key,links:{}};

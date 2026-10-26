@@ -36,7 +36,7 @@ The example path above is user configuration, never an application assumption. T
 - **Attachments:** Drop CSVs for paginated tables and images for previews. FIG, MAT, PDF, SVG, and NPZ are preserved as downloadable originals. SVG is deliberately retained as a file, not executed as page markup. Up to 20 MB per file, 100 attachments per entry. CSV previews support 20,000 rows / 100 columns.
 - **Stable references:** Permanent links use entry IDs; changing page numbers do not break references. Links resolve within a notebook that actually contains the entry.
 - **Clickable references:** Notes, sources, and next steps support `[descriptive text](https://...)` links to code, figures, data, and protocols. Labels stay concise in the reader and clickable in PDF exports; Markdown handoffs preserve the original destinations. Use verified GitHub commit/file links and configured Webdisk URLs. Existing reader access is assumed. Raw HTML, local filesystem links, and executable URL schemes are not interpreted.
-- **Backups:** Download or restore a self-contained JSON backup including original attachments. Restore replaces the current notebook after a review dialog. Back up first.
+- **Backups:** Download or restore a self-contained JSON backup including original attachments. Optional **Automatic backup** keeps encrypted private snapshots outside the browser. Restore replaces the current notebook after a review dialog. Back up first.
 
 On small screens, the menu at the upper left contains settings and backup tools. Very long page content scrolls vertically within its paper; page turning remains horizontal.
 
@@ -125,9 +125,15 @@ Original files stay in the source package without recoloring, resampling, or aut
 
 `npm run build` produces `dist/` with relative asset URLs. Serve that directory at a domain root or a subdirectory such as `/lab-notebook/`. No particular domain or hosting service is required. Notebook names and authors are data, not code.
 
-A static deployment uses IndexedDB in that browser at that origin/path; it does **not** share working storage with the local service, another device, or GitHub. Export a JSON backup and restore it to move data. Read and Contribute in the local workspace are interface modes. Browser storage relies on the device/browser account and is not application-encrypted. Clearing website data can remove it: keep backups.
+A static deployment uses IndexedDB in that browser at that origin/path. Read and Contribute are interface modes. Browser storage relies on the device/browser account and is not application-encrypted. It does not share working storage with the local service or GitHub.
 
-The local service provides shared file persistence for agents and the browser. Do not expose the loopback service publicly. Remote agent writes and automatic synchronization remain future authenticated-adapter work.
+With your configured Supabase project and the `private_automatic_backups` migration, open **Automatic backup → Enable automatic backup** once. The complete notebook, including original attachment bytes, drafts, revisions, and preferences, is encrypted in the browser with AES-GCM before upload. The database stores ciphertext and a hash of a random 256-bit recovery token. Reader links cannot open these backups. Ten recent snapshots are retained; the full notebook JSON limit is 20 MB. Keep independent downloaded backups for longer retention.
+
+**Keep the downloaded private backup recovery key outside the browser**, preferably in a password manager or backed-up folder. Clearing browser data removes the local copy of that key, too. In another browser, open **Automatic backup → Recover an existing private backup**, select the key file, then review and restore the snapshot. If the key remains in the browser but notebook storage is empty, a verified cloud snapshot is recovered automatically. Never send the backup key or reader-management owner key to a PI; share only a read-only reader link.
+
+Changes queue after each local save while the site is open; online retries run every 30 seconds and when connectivity returns. The sidebar reports pending or failed uploads. Wait for **All changes backed up** before clearing browser data or closing a browser with pending work. An offline change cannot be backed up until the site reconnects. Another browser's newer snapshot blocks a stale upload instead of being overwritten; review or download both versions before resolving the difference. Private backups do not publish or update a reader edition.
+
+The local service provides shared file persistence for agents and the browser. Do not expose the loopback service publicly. Private cloud backups support recovery, not automatic merging of concurrent edits across browsers.
 
 ## Private reader links
 
