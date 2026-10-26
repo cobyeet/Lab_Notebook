@@ -8,6 +8,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import math
 import mimetypes
 import os
 from pathlib import Path
@@ -20,6 +21,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 200 * 1024 * 1024
 STATUSES = {'observation', 'in-progress', 'verified', 'unverified'}
+KINDS = {'entry','experiment','analysis','meeting','literature','question','recording','method','figure','board'}
+RELATIONS = {'references','reanalyzes','uses-protocol','supports','challenges','follows-up','supersedes','resolves'}
 
 def blank():
     return dict(schema=1, title='Lab Notebook', subtitle='An ongoing record of research', author='', entries=[], draft=None)
@@ -29,9 +32,87 @@ def text(value, limit, label):
         raise ValueError('Invalid ' + label)
     return value
 
+def reference(value):
+    if not re.fullmatch(r'[A-Za-z0-9_-]+', text(value,100,'reference ID')):
+        raise ValueError('Invalid reference ID')
+
+def collection(value, limit, label):
+    if not isinstance(value,list) or len(value)>limit:
+        raise ValueError('Invalid '+label)
+    return value
+
+def validate_knowledge(e):
+    if 'kind' in e and (not isinstance(e['kind'],str) or e['kind'] not in KINDS):
+        raise ValueError('Invalid page kind')
+    for key in ('tags','aliases'):
+        if key in e:
+            for item in collection(e[key],100,key):text(item,200,key)
+    if 'properties' in e:
+        if not isinstance(e['properties'],dict) or len(e['properties'])>50:
+            raise ValueError('Invalid properties')
+        for key,value in e['properties'].items():
+            text(key,100,'property name')
+            if not key.strip() or key in {'__proto__','constructor','prototype'}:
+                raise ValueError('Invalid property name')
+            if isinstance(value,str):text(value,2000,'property value')
+            elif not isinstance(value,(bool,int,float)) or (isinstance(value,float) and not math.isfinite(value)):
+                raise ValueError('Invalid property value')
+    for key in ('links','tasks'):
+        seen=set()
+        for item in collection(e.get(key,[]),200,key):
+            if not isinstance(item,dict):raise ValueError('Invalid '+key)
+            reference(item.get('id'))
+            if item['id'] in seen:raise ValueError('Duplicate '+key+' ID')
+            seen.add(item['id'])
+            if key=='links':
+                reference(item.get('target'))
+                if not isinstance(item.get('type'),str) or item['type'] not in RELATIONS:raise ValueError('Invalid relationship type')
+            else:
+                text(item.get('text'),2000,'task text')
+                if not isinstance(item.get('state'),str) or item['state'] not in {'open','completed','revised','abandoned'}:raise ValueError('Invalid task state')
+                if item.get('outcome'):reference(item['outcome'])
+            text(item.get('reason',''),2000,'reason')
+    if 'board' in e:
+        board=e['board']
+        if not isinstance(board,dict):raise ValueError('Invalid board')
+        cards=set()
+        for card in collection(board.get('cards'),200,'board cards'):
+            if not isinstance(card,dict):raise ValueError('Invalid board card')
+            reference(card.get('id'));reference(card.get('target'))
+            if card['id'] in cards:raise ValueError('Duplicate board card')
+            cards.add(card['id'])
+            if card.get('attachment'):reference(card['attachment'])
+            for key in ('x','y'):
+                value=card.get(key)
+                if isinstance(value,bool) or not isinstance(value,(int,float)) or not -100000<=value<=100000:raise ValueError('Invalid board position')
+        connections=set()
+        for line in collection(board.get('connections'),400,'board connections'):
+            if not isinstance(line,dict):raise ValueError('Invalid board connection')
+            reference(line.get('id'))
+            reference(line.get('from'));reference(line.get('to'))
+            if line['id'] in connections:raise ValueError('Duplicate board connection')
+            connections.add(line['id'])
+            if line.get('from') not in cards or line.get('to') not in cards:raise ValueError('Invalid board connection')
+            text(line.get('label',''),200,'board label')
+
+def validate_workspace(w):
+    if not isinstance(w,dict):raise ValueError('Invalid workspace')
+    for ident in collection(w.get('bookmarks',[]),10000,'bookmarks'):reference(ident)
+    seen=set()
+    for view in collection(w.get('views',[]),100,'saved views'):
+        if not isinstance(view,dict):raise ValueError('Invalid saved view')
+        reference(view.get('id'));text(view.get('name'),100,'view name')
+        if view['id'] in seen:raise ValueError('Duplicate saved view')
+        seen.add(view['id'])
+        if not isinstance(view.get('filters'),dict):raise ValueError('Invalid view filters')
+        for key,value in view['filters'].items():
+            if key not in {'query','project','kind','status','tag','recording','from','to','relationship'}:raise ValueError('Invalid view filter')
+            text(value,300,'view filter')
+
 def validate_entry(e):
     if not isinstance(e, dict):
         raise ValueError('Entry must be an object')
+    validate_knowledge(e)
     ident = text(e.get('id'), 100, 'entry ID')
     if not re.fullmatch(r'[A-Za-z0-9_-]+', ident):
         raise ValueError('Entry ID must contain letters, digits, underscores, or hyphens')
@@ -76,6 +157,7 @@ def validate(n):
         text(n.get(key,''),limit,key)
     for key in ("brandName","brandSubtitle"):
         if key in n:text(n[key],100,key)
+    if 'workspace' in n:validate_workspace(n['workspace'])
     seen = set()
     for entry in n['entries']:
         validate_entry(entry)

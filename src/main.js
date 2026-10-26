@@ -12,6 +12,7 @@ import {
 import { readNotebook, writeNotebook } from "./storage.js";
 import { saveFile, exportBundle } from "./exports.js";
 import { cloudSharing } from "./cloud-ui.js";
+import { createExplorer, researchEditorMarkup, bindResearchEditor } from './explore.js';
 const readId = new URL(location.href).searchParams.get("read");
 const readOnly = new URL(location.href).searchParams.has("read");
 const readToken = new URLSearchParams(location.hash.slice(1)).get('key');
@@ -33,6 +34,7 @@ let notebook,
   server = false,
   etag,
   mode = "read",
+  workspaceMode = "book",
   current = 1,
   filter = "",
   query = "",
@@ -42,6 +44,9 @@ let notebook,
   draftTimer,
   observer,
   restoreCandidate;
+let captureResearch;
+const explorer = createExplorer({getNotebook:()=>notebook,persist,onOpen:openNote,onEdit:openEditor,readOnly,canEdit:()=>!readOnly&&mode==='contribute',toast,noteHref:pageHash});
+explorer.onShow = () => {workspaceMode='explore';render();};
 const $ = (s) => document.querySelector(s);
 const localDate = () =>
   new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
@@ -98,6 +103,7 @@ async function loadShared(quiet = false) {
       navigateHash();
     }
   } catch (e) {
+    explorer.clear();
     notebook = null; sharedRevision = undefined; pages = []; visible = [];
     observer?.disconnect();
     // Clear shared data and any export dialogs immediately after denied access.
@@ -106,6 +112,7 @@ async function loadShared(quiet = false) {
 }
 async function persist() {
   writable();
+  validateNotebook(structuredClone(notebook),true);
   const snapshot = structuredClone(notebook);
   saveChain = saveChain
     .catch(() => {})
@@ -173,8 +180,21 @@ function render() {
   rebuild();
   const projects = [...new Set(notebook.entries.map((e) => e.project))].sort();
   $("#app").innerHTML =
-    `<div class="app-shell"><aside class="sidebar"><a class="brand" href="${h(pageHash('contents'))}" aria-label="Go to contents"><span class="brand-icon"><svg viewBox="0 0 28 34" aria-hidden="true"><path d="M3 2h22M3 32h22M6 3c0 8 16 10 16 14S6 23 6 31M22 3c0 8-16 10-16 14s16 6 16 14M9 7h10M11 27h6"/></svg></span><span class="brand-wordmark">${h(notebook.brandName ?? branding.brandName)}<small>${h(notebook.brandSubtitle ?? branding.brandSubtitle)}</small></span></a><div class="workspace-label">${readOnly ? "SHARED NOTEBOOK" : "YOUR WORKSPACE"}</div><button class="side-link selected" id="contents-link"><span>▤</span> Notebook <span class="count">${notebook.entries.length}</span></button>${readOnly ? "" : '<button class="side-link" id="new-side"><span>＋</span> New entry</button>'}<div class="project-heading">PROJECTS<button id="clear-filter" title="Show all projects">All</button></div><div class="projects">${projects.length ? projects.map((p, i) => `<button class="project ${filter === p ? "active" : ""}" data-project="${h(p)}"><i style="--dot:${["#648d78", "#b49a6a", "#788aab", "#ac7e72"][i % 4]}"></i>${h(p)}<span>${notebook.entries.filter((e) => e.project === p).length}</span></button>`).join("") : '<p class="side-muted">Projects appear as you write.</p>'}</div><div class="sidebar-bottom"><div class="storage-card"><span class="privacy-dot"></span><b>${readOnly ? "Read-only edition" : "Private by default"}</b><p>${readOnly ? "Only entries selected by the owner appear here. This private link can be revoked by the owner." : server ? "Saved to your local notebook service. Agents can contribute." : "Saved in this browser. Download a backup to keep a portable copy."}</p><span class="storage-label">${readOnly ? "PRIVATE READER" : server ? "LOCAL SERVICE CONNECTED" : "BROWSER STORAGE"}</span></div>${readOnly ? '' : `<button class="side-link" id="backup"><span>↓</span> Back up notebook</button><button class="side-link" id="restore"><span>↑</span> Restore backup</button><button class="side-link" id="settings"><span>⚙</span> Notebook settings</button><button class="side-link" id="share"><span>↗</span> Reader links</button>`}</div></aside><main><header class="topbar"><button id="mobile-menu" aria-label="Open notebook menu">☰</button><div class="breadcrumbs">Workspace <span>/</span> <b>Notebook</b></div><div class="top-actions">${readOnly ? '<span class="reader-badge">Read only</span>' : `<div class="mode-switch" aria-label="Notebook mode"><button id="read-mode" class="${mode === "read" ? "active" : ""}">Read</button><button id="contribute-mode" class="${!readOnly && mode === "contribute" ? "active" : ""}">Contribute</button></div>`}<button class="button subtle" id="export">${icons.download} Export</button></div></header><section class="notebook-heading"><div><div class="eyebrow">THE RESEARCH, AS IT HAPPENS</div><h1>${h(notebook.title)}</h1><p>${h(notebook.subtitle)}</p></div>${readOnly ? "" : '<button class="button primary" id="new-entry">＋ New entry</button>'}</section><div class="book-toolbar"><div class="book-label"><span class="green-dot"></span>${filter ? h(filter) : "All projects"}<span class="divider"></span><span>${query ? `${visible.length - 1} matching pages` : `${notebook.entries.length} ${notebook.entries.length === 1 ? "entry" : "entries"} · ${pages.length} ${pages.length === 1 ? "page" : "pages"}`}</span></div><label class="search">${icons.search}<input id="search" placeholder="Find in notebook…" value="${h(query)}" aria-label="Search notebook"></label></div><div class="reading-room"><div class="book-track" id="book" tabindex="0" aria-label="Notebook pages. Scroll left for older entries.">${visible.map(renderPage).join("")}</div></div><footer class="reader-footer"><span class="scroll-hint">← Scroll left to turn the page <span>·</span> Newest entries first</span><div class="page-navigation"><button id="older" aria-label="Older page">←</button><label>Page <input id="page-number" type="number" min="1" max="${pages.length}" value="${current}" aria-label="Go to page"> of <span>${pages.length}</span></label><button id="newer" aria-label="Newer page">→</button></div><button class="text-button" id="to-contents">Back to contents ↗</button></footer></main></div><div id="toast" role="status"></div><dialog id="editor"></dialog><dialog id="export-dialog"></dialog><dialog id="settings-dialog"></dialog><dialog id="restore-dialog"></dialog><input type="file" id="restore-input" accept=".json,application/json" hidden>`;
+    `<div class="app-shell"><aside class="sidebar"><a class="brand" href="${h(pageHash('contents'))}" aria-label="Go to contents"><span class="brand-icon"><svg viewBox="0 0 28 34" aria-hidden="true"><path d="M3 2h22M3 32h22M6 3c0 8 16 10 16 14S6 23 6 31M22 3c0 8-16 10-16 14s16 6 16 14M9 7h10M11 27h6"/></svg></span><span class="brand-wordmark">${h(notebook.brandName ?? branding.brandName)}<small>${h(notebook.brandSubtitle ?? branding.brandSubtitle)}</small></span></a><div class="workspace-label">${readOnly ? "SHARED NOTEBOOK" : "YOUR WORKSPACE"}</div><button class="side-link selected" id="contents-link"><span>▤</span> Notebook <span class="count">${notebook.entries.length}</span></button>${readOnly ? "" : '<button class="side-link" id="new-side"><span>＋</span> New entry</button>'}<div class="project-heading">PROJECTS<button id="clear-filter" title="Show all projects">All</button></div><div class="projects">${projects.length ? projects.map((p, i) => `<button class="project ${filter === p ? "active" : ""}" data-project="${h(p)}"><i style="--dot:${["#648d78", "#b49a6a", "#788aab", "#ac7e72"][i % 4]}"></i>${h(p)}<span>${notebook.entries.filter((e) => e.project === p).length}</span></button>`).join("") : '<p class="side-muted">Projects appear as you write.</p>'}</div><div class="sidebar-bottom"><div class="storage-card"><span class="privacy-dot"></span><b>${readOnly ? "Read-only edition" : "Private by default"}</b><p>${readOnly ? "Only entries selected by the owner appear here. This private link can be revoked by the owner." : server ? "Saved to your local notebook service. Agents can contribute." : "Saved in this browser. Download a backup to keep a portable copy."}</p><span class="storage-label">${readOnly ? "PRIVATE READER" : server ? "LOCAL SERVICE CONNECTED" : "BROWSER STORAGE"}</span></div>${readOnly ? '' : `<button class="side-link" id="backup"><span>↓</span> Back up notebook</button><button class="side-link" id="restore"><span>↑</span> Restore backup</button><button class="side-link" id="settings"><span>⚙</span> Notebook settings</button><button class="side-link" id="share"><span>↗</span> Reader links</button>`}</div></aside><main><header class="topbar"><button id="mobile-menu" aria-label="Open notebook menu">☰</button><div class="breadcrumbs">Workspace <span>/</span> <b>Notebook</b></div><div class="top-actions">${readOnly ? '<span class="reader-badge">Read only</span>' : `<div class="mode-switch" aria-label="Notebook mode"><button id="read-mode" class="${mode === "read" ? "active" : ""}">Read</button><button id="contribute-mode" class="${!readOnly && mode === "contribute" ? "active" : ""}">Contribute</button></div>`}<button class="button subtle" id="export">${icons.download} Export</button></div></header><section class="notebook-heading"><div><div class="eyebrow">THE RESEARCH, AS IT HAPPENS</div><h1>${h(notebook.title)}</h1><p>${h(notebook.subtitle)}</p></div>${readOnly ? "" : '<button class="button primary" id="new-entry">＋ New entry</button>'}</section><div class="book-toolbar"><div class="book-label"><span class="green-dot"></span>${filter ? h(filter) : "All projects"}<span class="divider"></span><span>${query ? `${visible.length - 1} matching pages` : `${notebook.entries.length} ${notebook.entries.length === 1 ? "entry" : "entries"} · ${pages.length} ${pages.length === 1 ? "page" : "pages"}`}</span></div><label class="search">${icons.search}<input id="search" placeholder="Find in notebook…" value="${h(query)}" aria-label="Search notebook"></label></div><div class="reading-room"><div class="book-track" id="book" tabindex="0" aria-label="Notebook pages. Scroll left for older entries.">${workspaceMode==='book'?visible.map(renderPage).join(""):''}</div></div><footer class="reader-footer"><span class="scroll-hint">← Scroll left to turn the page <span>·</span> Newest entries first</span><div class="page-navigation"><button id="older" aria-label="Older page">←</button><label>Page <input id="page-number" type="number" min="1" max="${pages.length}" value="${current}" aria-label="Go to page"> of <span>${pages.length}</span></label><button id="newer" aria-label="Newer page">→</button></div><button class="text-button" id="to-contents">Back to contents ↗</button></footer></main></div><div id="toast" role="status"></div><dialog id="editor"></dialog><dialog id="export-dialog"></dialog><dialog id="settings-dialog"></dialog><dialog id="restore-dialog"></dialog><input type="file" id="restore-input" accept=".json,application/json" hidden>`;
   bind();
+  const notebookButton = $('#contents-link');
+  notebookButton.classList.toggle('selected',workspaceMode==='book');
+  const exploreButton=document.createElement('button');exploreButton.className='side-link'+(workspaceMode==='explore'?' selected':'');exploreButton.id='explore-link';exploreButton.innerHTML='<span>◎</span> Explore';exploreButton.onclick=()=>{workspaceMode='explore';render();};notebookButton.after(exploreButton);
+  const quickButton=document.createElement('button');quickButton.className='text-button quick-find-button';quickButton.textContent='⌕ Quick find';quickButton.setAttribute('aria-label','Quick find');quickButton.title='Quick find (Cmd/Ctrl K)';quickButton.onclick=()=>explorer.quickFind();$('.top-actions').prepend(quickButton);
+  const knowledgeDialog=document.createElement('dialog');knowledgeDialog.id='knowledge-dialog';$('#app').append(knowledgeDialog);
+  explorer.decorateLinks($('#app'));
+  if(workspaceMode==='explore'){
+    observer?.disconnect();
+    for(const s of ['.notebook-heading','.book-toolbar','.reading-room','.reader-footer'])$(s).hidden=true;
+    $('.breadcrumbs b').textContent='Explore';
+    const container=document.createElement('section');container.className='explore-workspace';$('main').append(container);explorer.mount(container);
+    return;
+  }
   const intended = visible.find((p) => p.number === current) || visible[0],
     book = $("#book"),
     paper = $("#page-" + intended.number);
@@ -200,7 +220,7 @@ function renderPage(p) {
   return `<article class="paper entry-paper" data-page="${p.number}" id="page-${p.number}"><div class="paper-topline"><span>${h(e.project)}</span><span>${e.date.replaceAll("-", "")}</span></div><div class="entry-meta"><span class="status ${h(e.status)}">${h(statusLabel(e.status))}</span>${e.significant ? '<span class="milestone">✦ MILESTONE</span>' : ""}${p.continuation ? "<span>CONTINUED</span>" : ""}</div><h2>${h(e.title)}</h2><div class="entry-body">${p.blocks
     .map((b) => {
       if (b.kind === "text")
-        return `<p>${renderTextLinks(b.text)}</p>`;
+        return `<p>${renderTextLinks(b.text,notebook.entries)}</p>`;
       const a = b.attachment;
       if (b.kind === "table")
         return `<figure class="data-figure"><figcaption>${h(a.name)} <span>ROWS ${b.offset + 1}–${b.offset + b.rows.length}</span></figcaption><div class="table-scroll"><table><thead><tr>${a.table.headers.map((c) => `<th>${h(c)}</th>`).join("")}</tr></thead><tbody>${b.rows.map((r) => `<tr>${r.map((c) => `<td>${h(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></figure>`;
@@ -210,9 +230,10 @@ function renderPage(p) {
     })
     .join(
       "",
-    )}</div>${!p.continuation && (e.sources || e.next) ? `<div class="entry-notes">${e.sources ? `<div><b>SOURCES & PROVENANCE</b><p>${renderTextLinks(e.sources)}</p></div>` : ""}${e.next ? `<div><b>NEXT STEPS</b><p>${renderTextLinks(e.next)}</p></div>` : ""}</div>` : ""}<div class="entry-tools"><button class="text-button" data-link="${h(p.id)}">Copy permanent link ↗</button>${!readOnly && mode === "contribute" ? `<button class="text-button" data-edit="${h(e.id)}">Edit entry ✎</button>` : ""}</div><div class="paper-footer"><span>${h(e.project)} / ${e.date}</span><span>${String(p.number).padStart(2, "0")}</span></div></article>`;
+    )}</div>${!p.continuation && (e.sources || e.next) ? `<div class="entry-notes">${e.sources ? `<div><b>SOURCES & PROVENANCE</b><p>${renderTextLinks(e.sources,notebook.entries)}</p></div>` : ""}${e.next ? `<div><b>NEXT STEPS</b><p>${renderTextLinks(e.next,notebook.entries)}</p></div>` : ""}</div>` : ""}<div class="entry-tools"><button class="text-button" data-connections="${h(e.id)}">Connections ◎</button><button class="text-button" data-link="${h(p.id)}">Copy permanent link ↗</button>${!readOnly && mode === "contribute" ? `<button class="text-button" data-edit="${h(e.id)}">Edit entry ✎</button>` : ""}</div><div class="paper-footer"><span>${h(e.project)} / ${e.date}</span><span>${String(p.number).padStart(2, "0")}</span></div></article>`;
 }
 function go(n, smooth = true) {
+  if(workspaceMode!=='book'){workspaceMode='book';current=n;render();}
   const target = visible.find((p) => p.number === n);
   if (!target) {
     filter = "";
@@ -245,6 +266,10 @@ function navigateHash() {
   const target = pages.find((p) => p.id === key);
   if (target) go(target.number, false);
   else go(Math.min(current, pages.length), false);
+}
+function openNote(id) {
+  const page=pages.find(p=>p.entry?.id===id);
+  if(page)go(page.number);
 }
 function observe() {
   observer?.disconnect();
@@ -279,6 +304,7 @@ function bind() {
     .forEach((b) => (b.onclick = () => openEditor()));
   for (const s of ["#contents-link", "#to-contents"])
     $(s).onclick = () => go(1);
+  document.querySelectorAll('[data-connections]').forEach(b=>b.onclick=()=>explorer.connections(b.dataset.connections));
   $("#older").onclick = () =>
     go(
       visible[
@@ -309,12 +335,14 @@ function bind() {
   };
   $("#clear-filter").onclick = () => {
     filter = "";
+    if(workspaceMode==='explore')explorer.project('');
     render();
   };
   document.querySelectorAll("[data-project]").forEach(
     (b) =>
       (b.onclick = () => {
         filter = b.dataset.project;
+        if(workspaceMode==='explore')explorer.project(filter);
         current = 1;
         render();
       }),
@@ -412,7 +440,7 @@ function draftValue() {
     created: new Date().toISOString(),
   };
 }
-function openEditor(id) {
+function openEditor(id, kind) {
   writable();
   if (mode !== "contribute") {
     mode = "contribute";
@@ -427,11 +455,16 @@ function openEditor(id) {
       );
       return;
     }
-    notebook.draft = structuredClone(source);
+    notebook.draft ??= structuredClone(source);
   } else notebook.draft ??= draftValue();
   const d = notebook.draft;
+  if(!source&&kind)d.kind=kind;
+  if(d.kind==='board')d.board??={cards:[],connections:[]};
   const dialog = $("#editor");
-  dialog.innerHTML = `<form id="entry-form"><div class="dialog-header"><div><div class="eyebrow">CONTRIBUTE</div><h2>${source ? "Edit an entry" : "Capture today’s work"}</h2></div><button type="button" class="close" data-close aria-label="Close editor">×</button></div><div class="editor-meta"><label>Date<input required type="date" name="date" value="${h(d.date)}"></label><label>Project<input required name="project" maxlength="100" placeholder="e.g. DECODE, SWARM…" value="${h(d.project)}" list="project-list"><datalist id="project-list">${[...new Set(notebook.entries.map((e) => e.project))].map((p) => `<option value="${h(p)}">`).join("")}</datalist></label></div><label>Entry title<input required name="title" maxlength="300" placeholder="What moved forward?" value="${h(d.title)}"></label><label>Notes<textarea name="body" rows="9" placeholder="Question / objective&#10;&#10;Work completed&#10;&#10;Observations and interpretation">${h(d.body)}</textarea></label><div class="dropzone" id="dropzone"><span>＋</span><b>Drop figures, images, or data here</b><small>CSV → tables · PNG, JPG, GIF, WebP → previews<br>FIG, MAT, PDF, SVG, NPZ → preserved originals · 20 MB per file</small><button class="text-button" type="button" id="browse">or browse files</button><input type="file" id="attachments" multiple hidden accept=".csv,.png,.jpg,.jpeg,.gif,.webp,.fig,.mat,.pdf,.svg,.npz"></div><div id="attachment-list"></div><div class="editor-meta"><label>Evidence status<select name="status">${["observation", "in-progress", "unverified", "verified"].map((v) => `<option value="${v}" ${v === d.status ? "selected" : ""}>${statusLabel(v)}</option>`).join("")}</select></label><label class="checkbox"><input type="checkbox" name="significant" ${d.significant ? "checked" : ""}>✦ Add to table of contents</label></div><label>Sources & provenance<textarea name="sources" rows="2" placeholder="Repository / commit, dataset ID, protocol, or chat reference">${h(d.sources)}</textarea></label><label>Next steps<textarea name="next" rows="2" placeholder="What should happen next?">${h(d.next)}</textarea></label><div class="dialog-footer"><span id="draft-state">Draft kept when you close</span><button type="button" id="discard" class="text-button">Discard draft</button><button class="button primary" type="submit">Save entry ↗</button></div></form>`;
+  dialog.innerHTML = `<form id="entry-form"><div class="dialog-header"><div><div class="eyebrow">CONTRIBUTE</div><h2>${source ? "Edit an entry" : "Capture today’s work"}</h2></div><button type="button" class="close" data-close aria-label="Close editor">×</button></div><div class="editor-meta"><label>Date<input required type="date" name="date" value="${h(d.date)}"></label><label>Project<input required name="project" maxlength="100" placeholder="Project name" value="${h(d.project)}" list="project-list"><datalist id="project-list">${[...new Set(notebook.entries.map((e) => e.project))].map((p) => `<option value="${h(p)}">`).join("")}</datalist></label></div><label>Entry title<input required name="title" maxlength="300" placeholder="What moved forward?" value="${h(d.title)}"></label><label>Notes<textarea name="body" rows="9" placeholder="Question / objective&#10;&#10;Work completed&#10;&#10;Observations and interpretation">${h(d.body)}</textarea></label><div class="dropzone" id="dropzone"><span>＋</span><b>Drop figures, images, or data here</b><small>CSV → tables · PNG, JPG, GIF, WebP → previews<br>FIG, MAT, PDF, SVG, NPZ → preserved originals · 20 MB per file</small><button class="text-button" type="button" id="browse">or browse files</button><input type="file" id="attachments" multiple hidden accept=".csv,.png,.jpg,.jpeg,.gif,.webp,.fig,.mat,.pdf,.svg,.npz"></div><div id="attachment-list"></div><div class="editor-meta"><label>Evidence status<select name="status">${["observation", "in-progress", "unverified", "verified"].map((v) => `<option value="${v}" ${v === d.status ? "selected" : ""}>${statusLabel(v)}</option>`).join("")}</select></label><label class="checkbox"><input type="checkbox" name="significant" ${d.significant ? "checked" : ""}>✦ Add to table of contents</label></div><label>Sources & provenance<textarea name="sources" rows="2" placeholder="Repository / commit, dataset ID, protocol, or chat reference">${h(d.sources)}</textarea></label><label>Next steps<textarea name="next" rows="2" placeholder="What should happen next?">${h(d.next)}</textarea></label><div class="dialog-footer"><span id="draft-state">Draft kept when you close</span><button type="button" id="discard" class="text-button">Discard draft</button><button class="button primary" type="submit">Save entry ↗</button></div></form>`;
+  const titleLabel=dialog.querySelector('[name=title]').closest('label');
+  titleLabel.insertAdjacentHTML('afterend',researchEditorMarkup(d,notebook.entries));
+  captureResearch=bindResearchEditor(dialog,d,notebook.entries,()=>{captureDraft();clearTimeout(draftTimer);draftTimer=setTimeout(flushDraft,600);});
   dialog.querySelector("[data-close]").onclick = () => dialog.close();
   dialog.addEventListener("cancel", () => flushDraft(), { once: true });
   $("#entry-form").oninput = () => {
@@ -447,19 +480,21 @@ function openEditor(id) {
   };
   $("#discard").onclick = async () => {
     clearTimeout(draftTimer);
+    const before=notebook.draft;
     notebook.draft = null;
     try {
       await persist();
       dialog.close();
       toast("Draft discarded.");
     } catch (e) {
+      notebook.draft=before;
       toast(e.message, true);
     }
   };
   $("#entry-form").onsubmit = async (e) => {
     e.preventDefault();
     clearTimeout(draftTimer);
-    captureDraft();
+    try {captureDraft(true);} catch(err){toast(err.message,true);return;}
     const entry = structuredClone(notebook.draft);
     if (!entry.title.trim() || !entry.project.trim()) {
       toast("Add a project and title.", true);
@@ -505,7 +540,7 @@ function openEditor(id) {
   showAttachments();
   dialog.showModal();
 }
-function captureDraft() {
+function captureDraft(strict=false) {
   const form = $("#entry-form");
   if (!form || !notebook.draft) return;
   for (const name of [
@@ -519,6 +554,9 @@ function captureDraft() {
   ])
     notebook.draft[name] = form.elements[name].value;
   notebook.draft.significant = form.elements.significant.checked;
+  const research=captureResearch?.(strict);
+  if(research)Object.assign(notebook.draft,research);
+  if(strict)delete notebook.draft.researchDraft;
 }
 async function flushDraft() {
   try {
@@ -641,6 +679,11 @@ function openExport() {
       ".py + CSV · run to create SVG, PDF, PNG, and NPZ",
     ],
     [
+      "obsidian",
+      "Obsidian vault",
+      "Markdown pages, properties, internal links, planning canvases, and original attachments",
+    ],
+    [
       "source",
       "Source archive",
       "Complete parent entries, original attachments, and metadata",
@@ -652,7 +695,7 @@ function openExport() {
     )
     .join(
       "",
-    )}</div><p class="export-note">PDF and handoff follow the selected pages. ${readOnly ? "Data and figure packages include complete parent entries and attachments from this shared edition." : "Data and figure packages include complete parent entries, attachments, and revision history. Review the full package before sharing."}</p><div class="dialog-footer"><span id="export-state">Download as one ZIP file</span><button class="button primary" type="submit">↓ Export selected pages</button></div></form>`;
+    )}</div><p class="export-note">PDF and handoff follow the selected pages. ${readOnly ? "Data and figure packages include complete parent entries and attachments from this shared edition." : "Data and figure packages include complete parent entries, attachments, and revision history. Review the full package before sharing."} Obsidian includes complete selected parent entries and originals; linked unselected pages, drafts, and earlier revisions are excluded.</p><div class="dialog-footer"><span id="export-state">Download as one ZIP file</span><button class="button primary" type="submit">↓ Export selected pages</button></div></form>`;
   dialog.querySelector("[data-close]").onclick = () => dialog.close();
   $("#all-pages").onclick = () =>
     ($("#export-form").elements.pages.value = `1-${pages.length}`);
@@ -768,6 +811,9 @@ async function restore(e) {
   }
   e.target.value = "";
 }
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'&&notebook&&!document.querySelector('dialog[open]')){e.preventDefault();explorer.quickFind();}
+});
 window.addEventListener("hashchange", () => {if (notebook) navigateHash();});
 load().catch((e) => {
   $("#app").innerHTML =

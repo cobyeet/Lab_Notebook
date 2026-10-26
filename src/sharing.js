@@ -1,9 +1,11 @@
 import {validateNotebook} from './model.js';
+import {selectedKnowledge} from './knowledge.js';
 export const MAX_PUBLICATION_BYTES=10*1024*1024;
 export function readerEdition(notebook,ids,includeAttachments=true){
-  const selected=new Set(ids),entries=notebook.entries.filter(e=>selected.has(e.id)).map(e=>({
+  const selected=new Set(ids),available=notebook.entries.filter(e=>selected.has(e.id)).map(e=>({...e,attachments:includeAttachments?e.attachments:[]})),entries=available.map(e=>({
     id:e.id,date:e.date,created:e.created,title:e.title,project:e.project,body:e.body,
     status:e.status,significant:e.significant,sources:e.sources||'',next:e.next||'',
+    ...selectedKnowledge(e,selected,available),
     attachments:includeAttachments?e.attachments.map(a=>({id:a.id,name:a.name,kind:a.kind,data:a.data,
       ...(a.sha256?{sha256:a.sha256}:{}),...(a.kind==='table'?{table:a.table}:{})})):[]
   }));

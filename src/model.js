@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { validateKnowledge, validateWorkspace, resolveTarget } from './knowledge.js';
 export const SCHEMA = 1;
 export const blankNotebook = () => ({
   schema: SCHEMA,
@@ -16,29 +17,38 @@ export const escapeHTML = (value) =>
         c
       ],
   );
-// Only labeled web links are interpreted; all other entry text remains literal.
+// Internal references and labeled web links are interpreted; HTML remains literal.
 export function inlineLinks(value) {
   const text = String(value ?? ""), parts = [];
-  const pattern = /\[([^\]\n]+)\]\((https?:\/\/(?:[^\s<>()]|\([^\s<>()]*\))+)\)/gi;
+  const pattern = /\[\[([^\]\n|]+)(?:\|([^\]\n]+))?\]\]|\[([^\]\n]+)\]\((https?:\/\/(?:[^\s<>()]|\([^\s<>()]*\))+)\)/gi;
   let start = 0;
   for (const match of text.matchAll(pattern)) {
+    if (match[1]) {
+      if(match.index>start)parts.push({text:text.slice(start,match.index),raw:text.slice(start,match.index)});
+      parts.push({target:match[1].trim(),text:match[2]||match[1],raw:match[0]});
+      start=match.index+match[0].length;
+      continue;
+    }
     let url;
     try {
-      const parsed = new URL(match[2]);
+      const parsed = new URL(match[4]);
       if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) continue;
       url = parsed.href;
     } catch { continue; }
     if (match.index > start) parts.push({text:text.slice(start,match.index),raw:text.slice(start,match.index)});
-    parts.push({text:match[1],url,raw:match[0]});
+    parts.push({text:match[3],url,raw:match[0]});
     start = match.index + match[0].length;
   }
   if (start < text.length) parts.push({text:text.slice(start),raw:text.slice(start)});
   return parts;
 }
-export function renderTextLinks(value) {
-  return inlineLinks(value).map(p => p.url
+export function renderTextLinks(value, entries = []) {
+  return inlineLinks(value).map(p => {
+    if(p.target){const target=resolveTarget(entries,p.target);return target?`<a class="internal-link" href="#entry=${encodeURIComponent(target.id)}" data-note="${escapeHTML(target.id)}">${escapeHTML(p.text)}</a>`:`<span class="unresolved-link" title="Reference unavailable in this notebook">${escapeHTML(p.text)}</span>`;}
+    return p.url
     ? `<a href="${escapeHTML(p.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(p.text)}</a>`
-    : escapeHTML(p.text)).join("").replaceAll("\n","<br>");
+    : escapeHTML(p.text);
+  }).join("").replaceAll("\n","<br>");
 }
 export function parseCSV(text) {
   const result = Papa.parse(text.replace(/^\uFEFF/, ""), {
@@ -92,7 +102,7 @@ export function paginate(entries) {
     for (const paragraph of text.split(/\n\s*\n/)) {
       let chunk = "", length = 0;
       for (const part of inlineLinks(paragraph)) {
-        if (part.url) {
+        if (part.url || part.target) {
           if (length && length + part.text.length > 1100) {
             blocks.push({kind:"text",text:chunk}); chunk = ""; length = 0;
           }
@@ -175,8 +185,10 @@ export function validateNotebook(value, preserveDraft = false) {
   string(value.author ?? "", 200, "author");
   for (const key of ["brandName", "brandSubtitle"])
     if (value[key] !== undefined) string(value[key], 100, key);
+  validateWorkspace(value.workspace);
   const ids = new Set();
   for (const e of value.entries) {
+    validateKnowledge(e);
     string(e.id, 100, "entry ID");
     if (!/^[a-zA-Z0-9_-]+$/.test(e.id) || ids.has(e.id))
       throw new Error("Duplicate or invalid entry ID.");

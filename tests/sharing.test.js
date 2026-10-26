@@ -36,6 +36,7 @@ test('Postgres enforces owner writes, verified reader access, revocation and sna
       grant usage on schema public,auth to anon,authenticated;
       grant execute on function auth.uid() to anon,authenticated;`);
     await db.exec(await readFile(new URL('../supabase/migrations/202610260001_reader_access.sql',import.meta.url),'utf8'));
+    for(const file of ['202610260002_reader_links.sql','20261026223159_research_connections.sql'])await db.exec(await readFile(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
     for (const [i,name] of ['owner','reader','outsider','unconfirmed'].entries())
       await db.query('insert into auth.users values ($1,$2,$3)', [ids[i],`${name}@example.org`,i===3?null:'2026-01-01T00:00:00Z']);
     async function as(index,fn) {
@@ -51,6 +52,7 @@ test('Postgres enforces owner writes, verified reader access, revocation and sna
     });
     const n = exampleNotebook(); n.draft = {body:'secret draft'}; n.extra='private top level';
     n.entries[0].revisions=[{body:'private history'}]; n.entries[0].extra='private entry';
+    n.entries[0].properties={recordingId:'R-001'};n.entries[0].tags=['timing'];
     n.entries[0].attachments=[{id:'attachment',name:'source.txt',kind:'file',data:'data:text/plain;base64,aGk=',extra:'private attachment'}];
     await as(0, async()=>{
       assert.equal((await db.query('select public.ln_publish_notebook($1,$2,0) revision',[notebookId,n])).rows[0].revision,1);
@@ -62,6 +64,7 @@ test('Postgres enforces owner writes, verified reader access, revocation and sna
       assert.equal(publications.length,1);
       assert.equal(JSON.stringify(publications).includes('private'),false);
       assert.equal(publications[0].content.draft,null);
+      assert.equal(publications[0].content.entries[0].properties.recordingId,'R-001');
       assert.equal((await db.query('select * from public.ln_readers')).rows.length,0);
       assert.equal((await db.query('select * from public.ln_accessible_notebooks()')).rows[0].access_role,'reader');
       await assert.rejects(db.query('select public.ln_publish_notebook($1,$2,1)',[notebookId,n]),/Only the notebook owner/);

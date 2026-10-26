@@ -3,6 +3,8 @@ import autoTable from "jspdf-autotable";
 import { zipSync, strToU8 } from "fflate";
 import { numericTable, paginate, inlineLinks } from "./model.js";
 import { pythonFigures, matlabFigures } from "./figure-templates.js";
+import {obsidianFiles} from './obsidian.js';
+import {resolveTarget} from './knowledge.js';
 export function saveFile(name, data, type = "application/octet-stream") {
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement("a");
@@ -172,6 +174,7 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
   const settings = exportSettings(options);
   await loadPdfFont();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const entrySheets=new Map(),internalAnnotations=[],exportedIds=new Set(pages.filter(p=>p.entry).map(p=>p.entry.id));
   const font = fontBase64 ? "DejaVuSans" : "helvetica";
   if (fontBase64) {
     doc.addFileToVFS("DejaVuSans.ttf", fontBase64);
@@ -216,11 +219,13 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
     doc.setFontSize(size);
     doc.setTextColor(...ink);
     const parts = links ? inlineLinks(value) : [];
-    if (parts.some(p => p.url)) {
+    if (parts.some(p => p.url || p.target)) {
       let x = 22;
       const lineHeight = size * 0.43;
       const nextLine = () => {x = 22; y += lineHeight;};
       for (const part of parts) {
+        const target=part.target?resolveTarget(notebook.entries,part.target):null;
+        const linked=part.url||target&&exportedIds.has(target.id);
         for (const word of part.text.match(/\n|[^\S\n]+|[^\s]+/g) || []) {
           if (word === "\n") {nextLine(); continue;}
           if (!word.trim()) {if (x > 22) x += doc.getTextWidth(word); continue;}
@@ -229,12 +234,13 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
             const width = doc.getTextWidth(piece);
             if (x > 22 && x + width > 188) nextLine();
             if (y > 266) {newPage(); y = 25;}
-            doc.setTextColor(...(part.url ? accent : ink));
+            doc.setTextColor(...(linked ? accent : ink));
             doc.text(piece,x,y);
             if (part.url) {
               doc.link(x,y-size*0.31,width,lineHeight,{url:part.url});
-              doc.setDrawColor(...accent); doc.setLineWidth(0.15); doc.line(x,y+0.6,x+width,y+0.6);
             }
+            else if(linked)internalAnnotations.push({sheet:doc.getCurrentPageInfo().pageNumber,x,y:y-size*.31,width,height:lineHeight,target:target.id});
+            if(linked){doc.setDrawColor(...accent); doc.setLineWidth(0.15); doc.line(x,y+0.6,x+width,y+0.6);}
             x += width;
           }
         }
@@ -284,6 +290,7 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
       });
     } else {
       const e = p.entry;
+      if(!entrySheets.has(e.id))entrySheets.set(e.id,firstSheet);
       text(`${e.date.replaceAll("-", "")}  /  ${e.project}  /  ${e.status}`, 9);
       text(e.title + (p.continuation ? " (continued)" : ""), 24, "bold");
       for (const b of p.blocks) {
@@ -329,6 +336,7 @@ export async function makePDF(notebook, pages, allPages, options = {}) {
       doc.text(`Notebook page ${p.number} · ${p.id}`, 22, 286);
     }
   }
+  for(const a of internalAnnotations){const pageNumber=entrySheets.get(a.target);if(pageNumber){doc.setPage(a.sheet);doc.link(a.x,a.y,a.width,a.height,{pageNumber});}}
   return new Uint8Array(doc.output("arraybuffer"));
 }
 export async function exportBundle(
@@ -342,6 +350,7 @@ export async function exportBundle(
   const files = {},
     payload = { ...selectedPayload(notebook, pages), exportSettings: settings };
   files["export-settings.json"] = strToU8(JSON.stringify(settings, null, 2));
+  if(formats.includes('obsidian'))Object.assign(files,obsidianFiles(notebook,payload.entries));
   if (formats.includes("md"))
     files["handoff.md"] = strToU8(handoff(notebook, pages));
   if (formats.includes("pdf"))

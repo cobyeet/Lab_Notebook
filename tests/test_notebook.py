@@ -37,6 +37,28 @@ class NotebookTest(unittest.TestCase):
         e=entry();e['date']='2026-02-30'
         with self.assertRaises(ValueError):m.contribute(self.path,e)
         self.assertEqual(before,self.path.read_bytes())
+    def test_research_metadata_round_trip_revisions_and_invalid_changes(self):
+        e=entry();e.update(kind='analysis',tags=['timing'],aliases=['Timing analysis'],properties={'recordingId':'R-001','count':2,'reviewed':False},
+            links=[dict(id='link-1',target='question',type='supports',reason='Author interpretation')],
+            tasks=[dict(id='task-1',text='Control artifacts',state='open',outcome='',reason='')])
+        m.contribute(self.path,e)
+        self.assertEqual(m.read(self.path)['entries'][0]['properties'],e['properties'])
+        self.assertEqual(m.contribute(self.path,e)['action'],'unchanged')
+        revised=json.loads(json.dumps(e));revised['tasks'][0].update(state='completed',outcome='follow-up')
+        m.contribute(self.path,revised,replace=True)
+        saved=m.read(self.path);self.assertEqual(saved['entries'][0]['revisions'][0]['tasks'][0]['state'],'open')
+        saved['workspace']={'bookmarks':[e['id']],'views':[dict(id='saved-view',name='Timing',filters={'tag':'timing'})]}
+        m.write(self.path,saved);self.assertEqual(m.read(self.path)['workspace'],saved['workspace'])
+        before=self.path.read_bytes()
+        for fields in [dict(kind={}),dict(properties={'invalid':[]}),dict(links=[dict(id='l',target='../private',type='supports')]),dict(tasks=[dict(id='t',text='step',state='maybe')]),dict(board={'cards':[dict(id='c',target='question',x=float('inf'),y=0)],'connections':[]})]:
+            invalid={**revised,**fields}
+            with self.assertRaises(ValueError):m.contribute(self.path,invalid,replace=True)
+            self.assertEqual(before,self.path.read_bytes())
+    def test_board_metadata_is_retained_and_connections_are_validated(self):
+        e=entry();e.update(kind='board',board=dict(cards=[dict(id='c1',target='recording',x=10,y=20),dict(id='c2',target='analysis',x=300,y=20)],connections=[dict(id='line',**{'from':'c1','to':'c2'},label='reanalyzes')]))
+        m.contribute(self.path,e);self.assertEqual(m.read(self.path)['entries'][0]['board'],e['board'])
+        e['board']['connections'][0]['to']='missing'
+        with self.assertRaises(ValueError):m.contribute(self.path,e,replace=True)
     def test_concurrent_contributions(self):
         errors=[]
         def add(i):
