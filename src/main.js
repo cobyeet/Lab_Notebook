@@ -44,7 +44,6 @@ let notebook,
   visible = [],
   saveChain = Promise.resolve(),
   draftTimer,
-  observer,
   restoreCandidate;
 let captureResearch;
 const explorer = createExplorer({getNotebook:()=>notebook,persist,onOpen:openNote,onEdit:openEditor,readOnly,canEdit:()=>!readOnly&&mode==='contribute',toast,noteHref:pageHash});
@@ -110,7 +109,6 @@ async function loadShared(quiet = false) {
   } catch (e) {
     explorer.clear();
     notebook = null; sharedRevision = undefined; pages = []; visible = [];
-    observer?.disconnect();
     // Clear shared data and any export dialogs immediately after denied access.
     sharing.gate(e.message);
   }
@@ -198,7 +196,6 @@ function render() {
   const knowledgeDialog=document.createElement('dialog');knowledgeDialog.id='knowledge-dialog';$('#app').append(knowledgeDialog);
   explorer.decorateLinks($('#app'));
   if(workspaceMode==='explore'){
-    observer?.disconnect();
     for(const s of ['.notebook-heading','.book-toolbar','.reading-room','.reader-footer'])$(s).hidden=true;
     $('.breadcrumbs b').textContent='Explore';
     const container=document.createElement('section');container.className='explore-workspace';$('main').append(container);explorer.mount(container);
@@ -281,18 +278,14 @@ function openNote(id) {
   if(page)go(page.number);
 }
 function observe() {
-  observer?.disconnect();
-  observer = new IntersectionObserver(
-    (items) => {
-      for (const item of items)
-        if (item.isIntersecting) {
-          current = Number(item.target.dataset.page);
-          $("#page-number").value = current;
-        }
-    },
-    { root: $("#book"), threshold: 0.6 },
-  );
-  document.querySelectorAll(".paper").forEach((p) => observer.observe(p));
+  const book = $('#book');
+  book.onscroll = () => {
+    if (!book.isConnected || !visible.length) return;
+    const step = book.querySelector('.paper').getBoundingClientRect().width + parseFloat(getComputedStyle(book).gap);
+    const index = Math.min(visible.length - 1, Math.max(0, Math.round(book.scrollLeft / step)));
+    current = visible[index].number;
+    $('#page-number').value = current;
+  };
 }
 function bind() {
   $("#mobile-menu").onclick = () =>
