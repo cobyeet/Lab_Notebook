@@ -20,9 +20,19 @@ export function createBackup({rpc, key, remember = () => {}, onStatus = () => {}
   const args = () => ({p_id: key.id, p_owner_token: key.token});
   async function unpack(record) {
     if (!record) return null;
-    if (record.payload?.version !== 1) throw new Error('Unsupported encrypted backup.');
+    if (![1, 2].includes(record.payload?.version)) throw new Error('Unsupported encrypted backup.');
     const clear = await crypto.subtle.decrypt({name: 'AES-GCM', iv: unbase64(record.payload.iv)}, await secret(), unbase64(record.payload.ciphertext));
-    const notebook = validateNotebook(JSON.parse(new TextDecoder().decode(clear)), true);
+    const decoded = JSON.parse(new TextDecoder().decode(clear));
+    if (record.payload.version === 2) {
+      if (!Array.isArray(decoded.attachmentData)) throw new Error('Invalid encrypted attachment index.');
+      for (const entry of [...decoded.notebook.entries, ...(decoded.notebook.draft ? [decoded.notebook.draft] : [])]) {
+        for (const saved of [entry, ...(entry.revisions || [])]) for (const attachment of saved.attachments || []) {
+          if (!Number.isInteger(attachment.data) || typeof decoded.attachmentData[attachment.data] !== 'string') throw new Error('Invalid encrypted attachment reference.');
+          attachment.data = decoded.attachmentData[attachment.data];
+        }
+      }
+    }
+    const notebook = validateNotebook(record.payload.version === 2 ? decoded.notebook : decoded, true);
     return {...record, notebook, hash: await fingerprint(JSON.stringify(notebook))};
   }
   async function latest() {return unpack(await rpc('ln_backup_read', {...args(), p_revision: null}));}
@@ -48,9 +58,19 @@ export function createBackup({rpc, key, remember = () => {}, onStatus = () => {}
     if (bytes.encode(text).length > MAX_BACKUP_BYTES) throw new Error('Private backup exceeds 20 MB. Download a JSON backup and reduce attachment size.');
     const hash = await fingerprint(text);
     if (hash === savedHash) {report('All changes backed up.'); return;}
+    // Revision history often repeats the same original figures. Store their bytes once
+    // inside the encrypted envelope, then restore every complete record on recovery.
+    const packed = JSON.parse(text), attachmentData = [], indexes = new Map();
+    for (const entry of [...packed.entries, ...(packed.draft ? [packed.draft] : [])]) {
+      for (const saved of [entry, ...(entry.revisions || [])]) for (const attachment of saved.attachments || []) {
+        if (typeof attachment.data !== 'string') throw new Error('Invalid saved attachment data.');
+        if (!indexes.has(attachment.data)) {indexes.set(attachment.data, attachmentData.length); attachmentData.push(attachment.data);}
+        attachment.data = indexes.get(attachment.data);
+      }
+    }
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, await secret(), bytes.encode(text));
-    const payload = {version: 1, iv: base64(iv), ciphertext: base64(new Uint8Array(encrypted))};
+    const encrypted = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, await secret(), bytes.encode(JSON.stringify({notebook: packed, attachmentData})));
+    const payload = {version: 2, iv: base64(iv), ciphertext: base64(new Uint8Array(encrypted))};
     report('Backing up changes…');
     try {
       if (!key.id) {

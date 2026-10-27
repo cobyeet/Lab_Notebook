@@ -54,6 +54,26 @@ test('changed saves upload automatically, identical saves are skipped, and ten r
   assert.equal(db.records.length,10);assert.equal((await backup.latest()).notebook.entries[0].body,'Observation 10');
   assert.equal((await backup.review(3)).notebook.entries[0].body,'Observation 1');
 });
+test('repeated original attachments are stored once while every entry and revision recovers unchanged',async()=>{
+  const db=database(),key={token:'a'.repeat(64)},n=sample();
+  n.entries[0].attachments[0].data='data:text/plain;base64,'+btoa('original figure bytes'.repeat(1000));
+  n.entries[0].revisions=Array.from({length:12},(_,i)=>({...structuredClone(n.entries[0]),revisions:undefined,body:`Revision ${i}`}));
+  const expected=JSON.parse(JSON.stringify(n)),backup=createBackup({rpc:db.rpc,key});
+  await backup.enable(n);assert.equal(db.records[0].payload.version,2);
+  assert.ok(JSON.stringify(db.records[0].payload).length<JSON.stringify(n).length/2);
+  assert.deepEqual((await backup.latest()).notebook,expected);
+});
+test('existing version 1 encrypted snapshots remain recoverable before a compact backup is saved',async()=>{
+  const db=database(),key={token:'b'.repeat(64)},n=sample(),iv=crypto.getRandomValues(new Uint8Array(12)),bytes=new TextEncoder();
+  const secret=await crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',bytes.encode(`Lab Notebook backup v1:${key.token}`)),'AES-GCM',false,['encrypt']);
+  const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},secret,bytes.encode(JSON.stringify(n)));
+  const payload={version:1,iv:Buffer.from(iv).toString('base64'),ciphertext:Buffer.from(encrypted).toString('base64')};
+  key.id=(await db.rpc('ln_backup_create',{p_owner_token:key.token,p_payload:payload})).id;
+  const backup=createBackup({rpc:db.rpc,key});assert.deepEqual(await backup.connect(blankNotebook()),n);
+  n.entries[0].project='UPDATED';backup.schedule(n);await backup.flush();
+  assert.equal(db.records.at(-1).payload.version,2);assert.deepEqual((await backup.review(1)).notebook,sample());
+  assert.deepEqual((await backup.latest()).notebook,n);
+});
 test('offline edits remain pending and retry safely, including a lost successful response',async()=>{
   const db=database(),key={token:'c'.repeat(64)},n=sample();const backup=createBackup({rpc:db.rpc,key});
   await backup.enable(n);db.offline=true;n.entries[0].body='Offline observation';backup.schedule(n);
@@ -93,7 +113,10 @@ test('Postgres backup endpoints enforce capabilities, private tables, revision c
     await db.exec(await readFile(new URL('../supabase/migrations/20261026233329_private_automatic_backups.sql',import.meta.url),'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20261026233851_optimize_backup_payload_validation.sql',import.meta.url),'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20261026234014_backup_request_limits.sql',import.meta.url),'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261027001512_notebook_transfer_limits.sql',import.meta.url),'utf8').then(sql=>sql.slice(sql.indexOf('-- Version 2'))));
     await db.query('select ln_private.check_backup($1)',[{...payload,ciphertext:'A'.repeat(10*1024*1024)}]);
+    await db.query('select ln_private.check_backup($1)',[{...payload,version:2}]);
+    await assert.rejects(db.query('select ln_private.check_backup($1)',[{...payload,version:3}]),/Invalid encrypted backup/);
     await db.exec('set role anon');
     const initial=(await db.query('select public.ln_backup_create($1,$2) result',[owner,payload])).rows[0].result;
     const id=initial.id;
