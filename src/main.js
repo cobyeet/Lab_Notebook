@@ -90,15 +90,17 @@ async function load() {
   backups = await automaticBackups({config:cloudConfig, getNotebook:()=>notebook, onRestore:(candidate, beforeSave)=>restore(null,candidate,beforeSave)});
   const recovered = await backups.initialize(notebook, !server);
   if (recovered) {await writeNotebook(recovered); notebook = recovered;}
+  await sharing.initialize(notebook);
   render();
   navigateHash();
   if (server) setInterval(refresh, 10000);
   if (new URL(location.href).searchParams.has('sharing')) await sharing.open();
 }
 async function loadShared(quiet = false) {
-  if (!readOnly || (quiet && !notebook)) return;
+  if (!readOnly) return;
   try {
-    const result = await sharing.read();
+    const result = await sharing.read(quiet ? sharedRevision : undefined);
+    if (!result) return;
     if (!notebook || sharedRevision !== result.revision) {
       notebook = result.notebook;
       sharedRevision = result.revision;
@@ -107,6 +109,7 @@ async function loadShared(quiet = false) {
       navigateHash();
     }
   } catch (e) {
+    if (quiet && notebook && e.code !== '42501') {toast('Reader update is delayed. Showing the last loaded edition.',true);return;}
     explorer.clear();
     notebook = null; sharedRevision = undefined; pages = []; visible = [];
     // Clear shared data and any export dialogs immediately after denied access.
@@ -135,6 +138,7 @@ async function persist() {
         etag = r.headers.get("etag");
       } else await writeNotebook(snapshot);
       backups?.changed(snapshot);
+      sharing?.changed(snapshot);
     });
   return saveChain;
 }
@@ -147,6 +151,7 @@ async function refresh() {
       notebook = validateNotebook(await r.json(), true);
       etag = r.headers.get("etag");
       backups?.changed(notebook);
+      sharing?.changed(notebook);
       render();
       toast("Notebook updated by an agent or another session.");
     }
@@ -180,6 +185,8 @@ function render() {
   if (!readOnly) {
     $('.storage-card p').id = 'backup-state';
     $('.storage-card p').textContent = backups.status;
+    const readerState=document.createElement('p');readerState.id='reader-sync-state';readerState.textContent=sharing.status;
+    $('.storage-card').append(readerState);
     const backupButton = document.createElement('button');
     backupButton.className = 'side-link'; backupButton.innerHTML = '<span>◈</span> Automatic backup';
     backupButton.onclick = () => backups.open().catch(e=>toast(e.message,true));

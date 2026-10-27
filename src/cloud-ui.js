@@ -1,17 +1,24 @@
 import {escapeHTML as h, validateNotebook} from './model.js';
 import {connectCloud, cloudResult, readerEdition} from './sharing.js';
 import {saveFile} from './exports.js';
+import {createLiveReader} from './live-reader.js';
 
 // Local owner keys and revocable reader keys are distinct capabilities.
 export async function cloudSharing({config, readId, readToken, getNotebook}) {
   const client = await connectCloud(config);
   const storageKey = config ? `lab-notebook-owner:${config.url}` : '';
-  let owner, publication, dialog;
+  const liveStorageKey = config ? `lab-notebook-reader-updates:${config.url}` : '';
+  let owner, publication, dialog, liveKey, live, liveStatus = '';
   try {owner = JSON.parse(localStorage.getItem(storageKey));} catch {}
+  try {liveKey = JSON.parse(localStorage.getItem(liveStorageKey));} catch {}
   const rpc = async (name,args) => cloudResult(await client.rpc(name,args));
   const token = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b=>b.toString(16).padStart(2,'0')).join('');
   const remember = () => localStorage.setItem(storageKey,JSON.stringify(owner));
   const ownerArgs = () => ({p_id:owner.id,p_owner_token:owner.token});
+  const reportLive = text => {liveStatus = text; for (const id of ['reader-sync-state','live-reader-status']) {const el=document.getElementById(id); if(el)el.textContent=text;}};
+  const attachLive = () => {live=createLiveReader({rpc,key:liveKey,remember:()=>localStorage.setItem(liveStorageKey,JSON.stringify(liveKey)),onStatus:reportLive});};
+  if (!readId && liveKey?.kind === 'reader-updates' && liveKey.url === config?.url) attachLive();
+  const saveLiveKey = () => saveFile('lab-notebook-reader-updates-key.json',JSON.stringify(liveKey,null,2),'application/json');
   const message = (text,error=false) => {const el=document.querySelector('#cloud-state'); if(el){el.textContent=text;el.classList.toggle('error',error);}};
   const run = fn => async event => {
     event?.preventDefault(); const button=event?.submitter||event?.currentTarget;
@@ -20,9 +27,10 @@ export async function cloudSharing({config, readId, readToken, getNotebook}) {
     finally {if(button?.tagName==='BUTTON')button.disabled=false;}
   };
   const readerURL = key => {const url=new URL(location.href);url.search='';url.searchParams.set('read',owner.id);url.hash=`key=${key}&entry=contents`;return url.href;};
-  async function read() {
+  async function read(knownRevision) {
     if(!client)throw new Error('Reader sharing is not configured on this website.');
     if(!readId||!readToken)throw new Error('This reader link is incomplete. Ask the owner for the full link.');
+    if(knownRevision!==undefined&&await rpc('ln_link_revision',{p_id:readId,p_reader_token:readToken})===knownRevision)return null;
     const result=await rpc('ln_link_read',{p_id:readId,p_reader_token:readToken});
     return {notebook:validateNotebook(result.content),revision:result.revision};
   }
@@ -36,6 +44,7 @@ export async function cloudSharing({config, readId, readToken, getNotebook}) {
     document.querySelector('#cloud-close').onclick=()=>dialog.close();if(!dialog.open)dialog.showModal();
     const body=document.querySelector('#cloud-body');
     if(!client){body.innerHTML='<p>Connect your own Supabase project to enable private reader links. Your working notebook remains local.</p>';return;}
+    if(live){await livePanel();return;}
     if(!owner){
       body.innerHTML=`<p>Share selected entries through private, read-only links. Readers need no account. Anyone with a link can read its shared edition; you can revoke each link here.</p><p>Only the entries you choose become readable to readers. Encrypted automatic backups are separate.</p><button class="button primary" id="cloud-create">Set up reader links</button><hr><label>Already set up on another browser?<input id="cloud-import" type="file" accept=".json,application/json"></label><p class="sharing-note">Restore your private owner key to manage an existing shared edition.</p>`;
       document.querySelector('#cloud-create').onclick=run(async()=>{
@@ -44,17 +53,34 @@ export async function cloudSharing({config, readId, readToken, getNotebook}) {
         // Download a recovery copy before relying on browser storage.
         saveOwner();remember();await open();message('Sharing is ready. Keep the downloaded owner key private and safe.');
       });
-      document.querySelector('#cloud-import').onchange=run(async e=>{
-        const file=e.target.files[0];if(!file)return;if(file.size>1000000)throw new Error('Invalid owner key file.');
-        const data=JSON.parse(await file.text());
-        if(data.version!==1||data.url!==config.url||!/^\w{8}-[\w-]{27}$/.test(data.id)||!/^[a-f0-9]{64}$/.test(data.token))throw new Error('This owner key does not match this website’s database.');
-        await rpc('ln_link_manage',{p_id:data.id,p_owner_token:data.token});
-        owner={version:1,url:config.url,id:data.id,token:data.token,links:data.links||{}};remember();await open();
-      });return;
+      body.querySelector('.sharing-note').textContent='Restore your private owner key or reader-update key to use the existing shared edition.';
+      document.querySelector('#cloud-import').onchange=run(importKey);return;
     }
     try{await ownerPanel();}catch(e){body.innerHTML='<p>The owner key could not open this shared edition. Your local notebook is still available.</p><button class="button subtle" id="cloud-forget">Use a different owner key</button>';document.querySelector('#cloud-forget').onclick=()=>{owner=null;localStorage.removeItem(storageKey);open();};message(e.message,true);}
   }
   function saveOwner(){saveFile('lab-notebook-owner-key.json',JSON.stringify(owner,null,2),'application/json');}
+  async function importKey(e) {
+    const file=e.target.files[0];if(!file)return;if(file.size>1000000)throw new Error('Invalid private key file.');
+    const data=JSON.parse(await file.text());
+    if(data.version!==1||data.url!==config.url||!/^\w{8}-[\w-]{27}$/.test(data.id)||!/^[a-f0-9]{64}$/.test(data.token))throw new Error('This key does not match this website’s database.');
+    if(data.kind==='reader-updates') {
+      await rpc('ln_live_read',{p_id:data.id,p_publisher_token:data.token});
+      liveKey=data;attachLive();await live.connect(getNotebook());await live.flush().catch(()=>{});
+      localStorage.setItem(liveStorageKey,JSON.stringify(liveKey));
+    } else {
+      await rpc('ln_link_manage',{p_id:data.id,p_owner_token:data.token});
+      owner={version:1,url:config.url,id:data.id,token:data.token,links:data.links||{}};remember();
+    }
+    await open();
+  }
+  async function livePanel() {
+    document.querySelector('#cloud-body').innerHTML=`<h3>Automatic reader updates</h3><p>Saved entries and original attachments update this same reader edition while your notebook is open and online. Unsaved drafts and private revision history stay private.</p><p>Existing reader entries and original files are preserved. Offline changes retry after reconnection; conflicting edits stop for review.</p><p id="live-reader-status" role="status">${h(liveStatus)}</p><button class="button primary" id="live-now">Update now</button> <button class="button subtle" id="live-toggle">${liveKey.enabled===false?'Resume':'Pause'} automatic updates</button><hr><button class="button subtle" id="live-key-backup">Back up update key</button><p class="sharing-note">Keep this private key outside the browser. Restore it here after switching browsers or clearing browser data. It can update this edition; it cannot manage reader links or open private backups.</p>${owner?'<button class="text-button" id="live-manage">Manage reader links</button>':'<label>Restore owner key to manage reader links<input id="cloud-import" type="file" accept=".json,application/json"></label>'}`;
+    document.querySelector('#live-now').onclick=run(async()=>{await live.retry(getNotebook());await livePanel();});
+    document.querySelector('#live-toggle').onclick=run(async()=>{await live.pause(liveKey.enabled===false);if(liveKey.enabled!==false)await live.retry(getNotebook());await livePanel();});
+    document.querySelector('#live-key-backup').onclick=saveLiveKey;
+    if(owner)document.querySelector('#live-manage').onclick=run(ownerPanel);
+    else document.querySelector('#cloud-import').onchange=run(importKey);
+  }
   async function ownerPanel() {
     publication=await rpc('ln_link_manage',ownerArgs());
     const selected=new Set(publication.content.entries.map(e=>e.id));
@@ -75,8 +101,25 @@ export async function cloudSharing({config, readId, readToken, getNotebook}) {
       if(owner.links)delete owner.links[b.dataset.revoke];remember();await ownerPanel();message('Reader link revoked.');
     }));
     document.querySelector('#cloud-owner-backup').onclick=saveOwner;
+    const enable=document.createElement('button');enable.className='button subtle';enable.textContent='Keep this reader edition updated automatically';
+    enable.onclick=run(async()=>{
+      const publisher=token();await rpc('ln_live_configure',{...ownerArgs(),p_publisher_token:publisher});
+      liveKey={version:1,kind:'reader-updates',url:config.url,id:owner.id,token:publisher,enabled:true};attachLive();
+      await live.connect(getNotebook());await live.flush();saveLiveKey();await open();
+    });
+    if(!live)document.querySelector('#cloud-publish').before(enable);
+    else {document.querySelector('#cloud-publish').hidden=true;document.querySelector('#cloud-body>.sharing-note').textContent='Automatic updates include saved entries and original attachments. Use the update panel to pause or review them.';}
   }
   function showLink(id){document.querySelector('#new-reader-link').innerHTML=`<label>Private reader link<input id="cloud-link" readonly value="${h(readerURL(owner.links[id]))}"></label><button class="button subtle" id="cloud-copy">Copy reader link</button>`;document.querySelector('#cloud-copy').onclick=run(copyLink);}
   async function copyLink(){const input=document.querySelector('#cloud-link');try{await navigator.clipboard.writeText(input.value);message('Reader link copied.');}catch{input.focus();input.select();message('Select and copy the reader link above.');}}
-  return {read,gate,open};
+  if(!readId) {
+    window.addEventListener('online',()=>{if(live&&liveKey.enabled!==false)live.retry(getNotebook()).catch(()=>{});});
+    setInterval(()=>{if(live?.unsettled&&liveKey.enabled!==false)live.retry(getNotebook()).catch(()=>{});},30000);
+    window.addEventListener('beforeunload',event=>{if(live?.unsettled&&liveKey.enabled!==false){event.preventDefault();event.returnValue='';}});
+  }
+  return {read,gate,open,
+    async initialize(notebook){if(live)await live.connect(notebook);},
+    changed(notebook){if(live)live.schedule(notebook);},
+    get status(){return liveStatus;},get enabled(){return !!live&&liveKey.enabled!==false;},
+  };
 }

@@ -30,4 +30,4 @@ export async function connectCloud(config){
   const {createClient}=await import('@supabase/supabase-js');
   return createClient(safe.url,safe.publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 }
-export function cloudResult(result){if(result.error)throw new Error(result.error.message);return result.data;}
+export function cloudResult(result){if(result.error)throw Object.assign(new Error(result.error.message),{code:result.error.code});return result.data;}
