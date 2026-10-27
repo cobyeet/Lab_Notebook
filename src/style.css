@@ -1366,6 +1366,16 @@ main {
 [hidden] { display: none !important; }
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 .quick-find-button { font-size:12px; }
+@media (max-height: 750px) {
+  .topbar { height: 48px; }
+  .notebook-heading { padding-block: 12px; }
+  .notebook-heading .eyebrow, .notebook-heading p { display: none; }
+  .notebook-heading h1 { font-size: 28px; margin: 0; }
+  .book-toolbar { margin-bottom: 10px; }
+  .book-track { padding-block: 12px; }
+  .paper { padding-top: 22px; padding-bottom: 18px; }
+  .reader-footer { padding-block: 10px; }
+}
 .explore-workspace { margin: 30px 40px 45px; min-width:0; min-height:0; flex:1; overflow:auto; }
 .explore-top,.explore-toolbar,.map-controls,.list-heading,.preview-heading,.preview-actions,.graph-caption,.explore-tabs,.research-row { display:flex; align-items:center; gap:12px; }
 .explore-top { justify-content:space-between; margin-bottom:24px; }
